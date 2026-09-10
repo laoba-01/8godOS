@@ -56,7 +56,7 @@ qemu-system-x86_64 -cdrom build/os.iso
 ```
 8GodOS/
 ├── src/
-│   ├── boot.asm      # multiboot2 头 + 入口(长模式切换进行中)
+│   ├── boot.asm      # multiboot2 头 + 长模式切换(32→64) + 64 位入口
 │   ├── linker.ld     # 链接脚本(内核固定在 1MB)
 │   └── kernel.c      # kmain + VGA 打印(M2 加入)
 ├── grub/

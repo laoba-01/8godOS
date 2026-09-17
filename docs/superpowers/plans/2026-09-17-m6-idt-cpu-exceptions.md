@@ -46,7 +46,7 @@
 - Consumes: `vga_putchar(char)`（`vga.c:81`）、`vga_puts(const char*)`（`vga.c:100`）
 - Produces: `void vga_printf(const char *fmt, ...)`（已在 `vga.h:33` 声明，不改头文件）
 
-- [ ] **Step 1: 先写"会失败"的验收**
+- [x] **Step 1: 先写"会失败"的验收**
 
 在 `kmain` 里 `vga_clear()` 之后加一行，只覆盖字符串类转换：
 
@@ -54,7 +54,7 @@
 vga_printf("A=%c S=%s P=%%\n", 'x', "str");
 ```
 
-- [ ] **Step 2: 确认它现在确实失败**
+- [x] **Step 2: 确认它现在确实失败**
 
 ```bash
 make && make iso
@@ -65,7 +65,7 @@ python3 tools/decode_vga.py build/m6.bin
 
 Expected: 第 0 行是空的或只有 `Hello, kernel!` 系列原内容 —— 自测那行**打不出来**（`vga_printf` 是空壳）。这就是本任务要让它变绿的那个红。
 
-- [ ] **Step 3: 实现骨架**
+- [x] **Step 3: 实现骨架**
 
 在 `src/vga.c` 里实现。要点：
 
@@ -74,11 +74,11 @@ Expected: 第 0 行是空的或只有 `Hello, kernel!` 系列原内容 —— �
 - `%c` 取参用 `va_arg(ap, int)`，**不是 `char`**：默认实参提升把 `char` 提升成了 `int`，写 `char` 在 x86_64 上会取错字节。
 - `%%` 输出一个字面 `%`。
 
-- [ ] **Step 4: 验收**
+- [x] **Step 4: 验收**
 
 重跑 Step 2 的两条命令。Expected: 解码结果第 0 行是 `A=x S=str P=%`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/vga.c src/kernel.c
@@ -96,18 +96,18 @@ git commit -m "M6: vga_printf 骨架与字符串类转换 (%c %s %%)"
 **Interfaces:**
 - Produces: `vga_printf` 的完整能力集 —— 转换 `%c %s %d %u %x %p %%`；长度修饰符 `l` / `ll` / `z`（三者统一按 64 位取值）；标志只支持 `0`（零填充）+ 十进制宽度；不做左对齐、精度、浮点。
 
-- [ ] **Step 1: 扩自测样本，覆盖全部类型与零填充**
+- [x] **Step 1: 扩自测样本，覆盖全部类型与零填充**
 
 ```c
 vga_printf("d=%d u=%u x=%x X=%016lx p=%p w=%010lu\n",
            -42, 42u, 0xdeadbeef, 0x1234ul, (void *)0xb8000, 7ul);
 ```
 
-- [ ] **Step 2: 确认失败**
+- [x] **Step 2: 确认失败**
 
 按 Task 1 Step 2 的命令重跑。Expected: 字符串部分对了，数字部分打不出来或全是乱值。
 
-- [ ] **Step 3: 实现数字转换与格式解析**
+- [x] **Step 3: 实现数字转换与格式解析**
 
 要点：
 
@@ -117,7 +117,7 @@ vga_printf("d=%d u=%u x=%x X=%016lx p=%p w=%010lu\n",
 - 长度修饰符 `l` / `ll` / `z` 都按 64 位取值（x86_64 上 `long`、`long long`、`size_t` 都是 64 位）。**`%x` 与 `%lx` 取值宽度不同，必须区分**：传 `uint64_t` 却写 `%x` 会打错。
 - 格式解析顺序：`%` → 可选的 `0` 标志 → 可选的十进制宽度 → 可选的长度修饰符 → 转换字符。
 
-- [ ] **Step 4: 闸门验收**
+- [x] **Step 4: 闸门验收**
 
 重跑解码，逐字比对 Step 1 那一行，期望：
 
@@ -127,7 +127,7 @@ d=-42 u=42 x=deadbeef X=0000000000001234 p=0x00000000000b8000 w=0000000007
 
 **这一条不过，不进 Task 3。** panic 输出打歪了，你分不清是 printf 的问题还是栈帧的问题。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/vga.c src/kernel.c
@@ -174,11 +174,11 @@ void idt_init(void);
 - `src/idt.c` 定义 `void isr_handler(regs_t *r)`（**非 static**，供汇编 `call`）
 - 门参数：`selector = 0x08`、`type_attr = 0x8E`（P=1, DPL=0, 64 位中断门）、`ist = 0`
 
-- [ ] **Step 1: Makefile 加 nasm 规则与链接项**
+- [x] **Step 1: Makefile 加 nasm 规则与链接项**
 
 加 `build/isr.o` 目标（`$(AS) $(ASFLAGS) src/isr.asm -o $@`），并把它加进 `$(KERNEL)` 的链接行。`src/isr.asm` 要写进依赖里。
 
-- [ ] **Step 2: 写 `idt.h`，并用 `_Static_assert` 锁死栈帧契约**
+- [x] **Step 2: 写 `idt.h`，并用 `_Static_assert` 锁死栈帧契约**
 
 除了上面的结构体，加上：
 
@@ -193,7 +193,7 @@ _Static_assert(sizeof(regs_t)               == 160,    "栈帧大小应为 20 qw
 
 需要 `#include <stddef.h>` 取 `offsetof`。**这是本任务最有价值的一步**：以后谁改了字段顺序、或在 common 里多压一个寄存器，编译期就炸，不用等到某个异常打出一串莫名其妙的 RIP。
 
-- [ ] **Step 3: 写 `isr.asm` 的最小版**
+- [x] **Step 3: 写 `isr.asm` 的最小版**
 
 - 文件开头 `bits 64`；stub 地址表放 `section .rodata`；`extern isr_handler`、`global isr_stub_table`。
 - 先只做一个真的 stub（向量 0，`#DE`）：**先压一个 dummy `0`**（`#DE` 属于"CPU 不压错误码"那类），再压向量号 `0`，然后 `jmp` 到 common。
@@ -202,13 +202,13 @@ _Static_assert(sizeof(regs_t)               == 160,    "栈帧大小应为 20 qw
 - 在 common stub 里写一行注释：**总压栈 20 qword（偶数），16 字节对齐靠这个性质保持；加寄存器要重新数。**
 - 坑：**x86_64 没有 `pusha`/`popa`**，15 个寄存器手动压。**返回用 `iretq` 不是 `iret`。**
 
-- [ ] **Step 4: 写 `idt.c` 最小版**
+- [x] **Step 4: 写 `idt.c` 最小版**
 
 - `static idt_entry_t idt[256] __attribute__((aligned(16)));` 放 `.bss`。
 - `idt_init()`：先把 256 项**全部门清 0**，再循环 32 次按 `isr_stub_table[i]` 填门（本步表里 32 项指向同一个 stub，没关系）；最后 `lidt` 一个 `{limit = sizeof(idt) - 1, base = &idt[0]}` 的结构（`lidt` 可以用内联汇编，不必写进 `isr.asm`）。注意 **limit 是字节数减一：`256 * 16 - 1 = 4095 = 0x0FFF`**。
 - `isr_handler(regs_t *r)` 最小版：只打一行 `EXCEPTION 0x00\n`，然后 `cli; hlt` 死循环。暂时不读 `r` 的其它字段。
 
-- [ ] **Step 5: `kernel.c` 接线**
+- [x] **Step 5: `kernel.c` 接线**
 
 `vga_clear()` 之后、自测行之前调 `idt_init()`；自测那一行先注释掉或保留，末尾加除零触发：
 
@@ -220,7 +220,7 @@ volatile int c = a / b;
 
 **两个变量都要 `volatile`**，否则 `-O2` 会在编译期把这次除法优化掉，你会得到"什么都没发生"。
 
-- [ ] **Step 6: 验收 A —— IDT 真的装上了**
+- [x] **Step 6: 验收 A —— IDT 真的装上了**
 
 ```bash
 make && make iso
@@ -238,7 +238,7 @@ Expected: 输出里 `IDT=` 那一行的 base **等于 `nm` 查到的地址**，l
 
 **这一步比"看着没崩"强得多** —— 它直接证明 `lidt` 装的是你那张表，而不是 BIOS 留下的旧表。
 
-- [ ] **Step 7: 验收 B —— 全链路打通**
+- [x] **Step 7: 验收 B —— 全链路打通**
 
 ```bash
 { sleep 8; echo 'memsave 0xb8000 4000 build/m6.bin'; sleep 0.3; echo quit; } \
@@ -250,7 +250,7 @@ Expected: 屏幕上出现 `EXCEPTION 0x00`。
 
 **若这里是 triple fault 重启（`-no-reboot` 下 QEMU 直接退出）**，按顺序查：`_Static_assert` 过了没有 → 门描述符的 `offset` 三段拼对了没有 → common 里压栈顺序和 `regs_t` 对不对 → `iretq` 是否写成了 `iret`。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/isr.asm src/idt.c src/idt.h src/kernel.c Makefile
@@ -268,7 +268,7 @@ git commit -m "M6: IDT 装载 + 单向量 (#DE) 全链路打通"
 - Produces: `isr_stub_table[32]` 全量；`static const char *const exception_names[32]`
 - 有错误码的向量（CPU 自己压）：**`8, 10, 11, 12, 13, 14, 17, 21, 29, 30`**；其余 22 个不压
 
-- [ ] **Step 1: 把单 stub 换成宏生成的 32 个**
+- [x] **Step 1: 把单 stub 换成宏生成的 32 个**
 
 用两个 NASM 宏分工，例如 `ISR_NOERR n`（先压 dummy `0`，再压 `n`）和 `ISR_ERR n`（只压 `n`，错误码由 CPU 已经压好），然后对 0~31 逐个实例化；或者用 `%assign` + `%rep` 配合条件判断。
 
@@ -285,7 +285,7 @@ isr_stub_table:
 
 **两条路径的分发写反，是本任务唯一但最致命的坑**：症状是"有些异常正常、有些异常 RIP 完全不对"。Step 4 的 `#GP` 验收就是专门抓它的。
 
-- [ ] **Step 2: `idt.c` 循环填 32 个门 + 建异常名表**
+- [x] **Step 2: `idt.c` 循环填 32 个门 + 建异常名表**
 
 按 Intel 手册 Vol.3 表 6-1 填 `exception_names`（至少保证下表这几条准确，其余照抄手册）：
 
@@ -319,7 +319,7 @@ isr_stub_table:
 | `0x1E` | `#SX` | Security Exception |
 | `0x1F` | — | Reserved |
 
-- [ ] **Step 3: `kernel.c` 加用例开关**
+- [x] **Step 3: `kernel.c` 加用例开关**
 
 用一个编译期宏切换四种触发，四次运行每次只改一个数字：
 
@@ -336,7 +336,7 @@ isr_stub_table:
 
 **每个触发的指针/结果都要 `volatile`**，否则 `-O2` 会把访存整条优化掉。
 
-- [ ] **Step 4: 让 panic 打出错误码并验收两条路径**
+- [x] **Step 4: 让 panic 打出错误码并验收两条路径**
 
 `isr_handler` 补上：按 `r->vector` 查名，打印向量号、名称、`error=0x%016lx`（`r->error_code`）。
 
@@ -349,7 +349,7 @@ isr_stub_table:
 
 **`#GP` 的 `error=0x30` 是整个 M6 最强的判别点**：`0x30` 就是那个越界的段选择子，它证明错误码来自 CPU 而不是 stub 补的 dummy `0`。宏的两类如果分反了，这一条立刻露馅。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/isr.asm src/idt.c src/kernel.c
@@ -363,7 +363,7 @@ git commit -m "M6: 宏生成 32 个 stub + 错误码两类处理 + 异常名表"
 **Files:**
 - Modify: `src/idt.c`
 
-- [ ] **Step 1: 补齐 panic 输出**
+- [x] **Step 1: 补齐 panic 输出**
 
 固定成这个形状（`cr2` 行**只在 `vector == 14` 时**打印）：
 
@@ -378,11 +378,11 @@ rip=0x0000000000100234 cs=0x0008 rflags=0x0000000000000092
 - `cr2`：在 `idt.c` 里就地加一个 `static inline uint64_t read_cr2(void)`，用内联汇编 `mov %%cr2, %0`。**错误码只给访问类型（P/W/U 位），出错地址只在 CR2 里**。先不单开 `cpu.h`。
 - （可选）要显示"被打断的 rsp"，用 `(uint64_t)&r->rflags + 8` 从栈帧推算——**这是算出来的，不是 CPU 压栈字段**（ring0 下 CPU 不压 `RSP`/`SS`），文案上要写清楚，免得以后被人当真字段用。
 
-- [ ] **Step 2: `idt_init()` 加 `32~255` 的清零循环**
+- [x] **Step 2: `idt_init()` 加 `32~255` 的清零循环**
 
 `.bss` 不保证为 0（`_start64` 没有清 BSS），只写 32 个门就等于留下 224 个垃圾描述符。这个循环别漏。
 
-- [ ] **Step 3: 四条用例全跑，逐字比对**
+- [x] **Step 3: 四条用例全跑，逐字比对**
 
 四次运行、每次改 `M6_CASE`，与 `计划书.md` §M6 验证标准里那张表逐条比对：
 
@@ -393,7 +393,7 @@ rip=0x0000000000100234 cs=0x0008 rflags=0x0000000000000092
 | `#GP` | `EXCEPTION 0x0D #GP General Protection`，`error=0x0000000000000030` |
 | `#PF` | `EXCEPTION 0x0E #PF Page Fault`，`error` 的 **bit0 = 0**（页不存在），`cr2=0x0000000000300000` |
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/idt.c
@@ -408,7 +408,7 @@ git commit -m "M6: panic 输出完整化 (错误码/rip/cs/rflags/cr2) + 未定�
 - Modify: `计划书.md`, `README.md`
 - Verify: 全仓库
 
-- [ ] **Step 1: 确认零警告**
+- [x] **Step 1: 确认零警告**
 
 ```bash
 make clean && make 2>&1 | grep -i warning
@@ -416,13 +416,13 @@ make clean && make 2>&1 | grep -i warning
 
 Expected: 只有 M5 遗留的那两条 `ld` 警告，**没有任何 `gcc`/`nasm` 的编译警告**。
 
-- [ ] **Step 2: 回填计划书**
+- [x] **Step 2: 回填计划书**
 
 - `计划书.md` §M6：状态改成 ✅ 完成，补上**「实施中踩到并解决的关键点」**（照 M5 的写法，记录你实际踩到的坑，不是照抄设计）和**「教训」**。
 - 三条遗留项确认在册：`_start64` 未清 `.bss`（补之前要先给 `linker.ld` 加 `__bss_start`/`__bss_end`）、`#DF` 无 IST 保护栈、`ld` 两条警告。
 - `README.md` 进度表加 M6 行。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add 计划书.md README.md

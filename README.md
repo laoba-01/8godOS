@@ -12,6 +12,7 @@
 | M3 | VGA 打印 `Hello, kernel!` | ✅ 完成 |
 | M4 | 一键构建脚本 | ✅ 完成 |
 | M5 | VGA 终端(滚动 + 硬件光标) | ✅ 完成 |
+| M6 | IDT 与 CPU 异常处理 | ✅ 完成 |
 
 详细技术方案与路线图见 [`计划书.md`](计划书.md)。
 
@@ -50,12 +51,15 @@ CFLAGS="-ffreestanding -fno-stack-protector -fno-pie -no-pie -m64 \
         -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large \
         -Wall -Wextra -O2"
 nasm -f elf64 src/boot.asm -o build/boot.o
+nasm -f elf64 src/isr.asm  -o build/isr.o
 gcc $CFLAGS -c src/kernel.c -o build/kernel.o
 gcc $CFLAGS -c src/vga.c    -o build/vga.o
+gcc $CFLAGS -c src/idt.c    -o build/idt.o
 
 # 链接
 ld -nostdlib -z max-page-size=0x1000 -T src/linker.ld \
-   -o build/kernel.elf build/boot.o build/kernel.o build/vga.o
+   -o build/kernel.elf build/boot.o build/kernel.o build/vga.o \
+      build/isr.o build/idt.o
 
 # 组 ISO
 mkdir -p build/iso/boot/grub
@@ -76,10 +80,15 @@ qemu-system-x86_64 -cdrom build/os.iso
 ├── src/
 │   ├── boot.asm      # multiboot2 头 + 长模式切换(32→64) + 64 位入口
 │   ├── linker.ld     # 链接脚本(内核固定在 1MB)
-│   ├── kernel.c      # kmain(启动逻辑)
-│   ├── vga.c         # VGA 文本终端实现(M5 加入)
+│   ├── kernel.c      # kmain(启动逻辑) + M6 异常用例开关
+│   ├── vga.c         # VGA 文本终端 + vga_printf(M5/M6)
 │   ├── vga.h         # VGA 接口与调色板常量(M5 加入)
-│   └── io.h          # 端口读写 outb / inb(M5 加入)
+│   ├── io.h          # 端口读写 outb / inb(M5 加入)
+│   ├── isr.asm       # 32 个异常 stub(宏生成) + common stub(M6 加入)
+│   ├── idt.c         # IDT 表 + 门构造 + 异常名表 + panic(M6 加入)
+│   └── idt.h         # 门描述符与 regs_t 栈帧结构(M6 加入)
+├── tools/
+│   └── decode_vga.py # 显存 dump 解码器(取证用, 故意放在 build/ 之外)
 ├── grub/
 │   └── grub.cfg      # ISO 的 GRUB 菜单
 ├── build/            # 构建产物(git 忽略)

@@ -1,3 +1,10 @@
+/*
+ * 来源声明 —— 详见 docs/AI-使用记录.md
+ *   AI 生成: 本文件全部内容(2026-09-17, M6)。
+ *   队员验证: regs_t 的字段顺序契约由 _Static_assert 在编译期强制;
+ *             四条用例的 rip/cs/rflags 取值与预期相符。
+ */
+
 #ifndef IDT_H
 #define IDT_H
 

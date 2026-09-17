@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """解码 VGA 文本模式显存 dump。
 
+来源声明 —— 详见 docs/AI-使用记录.md
+  AI 生成: 原版由 AI 于 2026-09-15 写入 build/(已随 make clean 丢失);
+           2026-09-17 由 AI 重建并迁至 tools/。
+  队员验证: 队员在 M5/M6 各里程碑以其输出做验收判读。
+
 用法:
     python3 tools/decode_vga.py <dump 文件> [--attr]
 

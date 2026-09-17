@@ -1,3 +1,8 @@
+; 来源声明 —— 详见 docs/AI-使用记录.md
+;   AI 生成: 本文件全部内容(2026-09-17, M6)。
+;   队员验证: 以 QEMU 取证四条用例(#DE/#UD/#GP/#PF)并逐字比对 panic 输出;
+;             以 nm + `info registers` 核对 IDT base/limit。
+;
 ; 异常 stub: 把 (向量号, 错误码) 压成规整栈帧, 再跳统一的 common stub 保存现场。
 ;
 ; 错误码分两类 —— CPU 只对一部分向量压错误码:

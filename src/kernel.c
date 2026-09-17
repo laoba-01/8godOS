@@ -1,3 +1,11 @@
+/*
+ * 来源声明 —— 详见 docs/AI-使用记录.md
+ *   队员编写: M3 的 kmain 与 vga_puts() 调用。
+ *   AI 生成: M5 结构调整后的版本(2026-09-15); M6 的 idt_init() 调用与
+ *            异常用例开关 m6_trigger() / M6_CASE(2026-09-17)。
+ *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
+ */
+
 #include "vga.h"
 #include "idt.h"
 

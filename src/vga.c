@@ -1,3 +1,11 @@
+/*
+ * 来源声明 —— 详见 docs/AI-使用记录.md
+ *   本文件在 M5 期间(2026-09-15)由 AI 整写; 其中 vga_update_cursor() 的原型
+ *   由队员先行编写并交 AI 审阅, AI 重写时吸纳入代码。
+ *   M6 的 vga_printf() / vga_put_uint() 由 AI 生成(2026-09-17)。
+ *   队员验证: M5 以 CRTC 寄存器读数核对光标位置; M6 以显存解码逐字比对。
+ */
+
 #include "vga.h"
 #include "io.h"
 #include <stdarg.h>

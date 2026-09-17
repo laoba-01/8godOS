@@ -108,7 +108,7 @@ void vga_puts(const char *s) {
  * 把无符号数按 base 进制吐出去, 不足 width 位时在高位补 pad 字符。
  * 先把数字从低位到高位收进 digits, 再补 pad, 最后从高位往低位吐。
  */
-static void vga_put_uint(uint64_t value, unsigned base, int width, char pad) {
+static void vga_put_uint(uint64_t value, unsigned base, int width, char pad, int upper) {
     char digits[24];   /* 10 进制下 uint64 最长 20 位, 24 够 */
     int n = 0;
 
@@ -117,7 +117,7 @@ static void vga_put_uint(uint64_t value, unsigned base, int width, char pad) {
     } else {
         while (value > 0) {
             unsigned d = (unsigned)(value % base);
-            digits[n++] = (char)(d < 10 ? '0' + d : 'a' + (d - 10));
+            digits[n++] = (char)(d < 10 ? '0' + d : (upper ? 'A' : 'a') + (d - 10));
             value /= base;
         }
     }
@@ -132,7 +132,7 @@ static void vga_put_uint(uint64_t value, unsigned base, int width, char pad) {
 
 /*
  * 最小格式化输出。支持:
- *   转换:     %c %s %d %u %x %p %%
+ *   转换:     %c %s %d %u %x %X %p %%
  *   长度修饰: l / ll / z —— 三者都按 64 位取值
  *             (x86_64 上 long / long long / size_t 都是 64 位)
  *   标志:     只支持 '0'(零填充), 只配十进制宽度
@@ -200,28 +200,29 @@ void vga_printf(const char *fmt, ...) {
                 int64_t sv = is64 ? va_arg(ap, int64_t) : (int64_t)va_arg(ap, int);
                 if (sv < 0) {
                     vga_putchar('-');
-                    vga_put_uint((uint64_t)(~sv) + 1, 10, width, pad);  /* 取反加一, INT64_MIN 也不溢出 */
+                    vga_put_uint((uint64_t)(~sv) + 1, 10, width, pad, 0);  /* 取反加一, INT64_MIN 也不溢出 */
                 } else {
-                    vga_put_uint((uint64_t)sv, 10, width, pad);
+                    vga_put_uint((uint64_t)sv, 10, width, pad, 0);
                 }
                 break;
             }
 
             case 'u': {
                 uint64_t uv = is64 ? va_arg(ap, uint64_t) : (uint64_t)va_arg(ap, unsigned int);
-                vga_put_uint(uv, 10, width, pad);
+                vga_put_uint(uv, 10, width, pad, 0);
                 break;
             }
 
-            case 'x': {
+            case 'x':
+            case 'X': {
                 uint64_t xv = is64 ? va_arg(ap, uint64_t) : (uint64_t)va_arg(ap, unsigned int);
-                vga_put_uint(xv, 16, width, pad);
+                vga_put_uint(xv, 16, width, pad, *p == 'X');
                 break;
             }
 
             case 'p':
                 vga_puts("0x");
-                vga_put_uint((uint64_t)va_arg(ap, void *), 16, 16, '0');
+                vga_put_uint((uint64_t)va_arg(ap, void *), 16, 16, '0', 0);
                 break;
 
             default:

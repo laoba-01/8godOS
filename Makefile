@@ -25,14 +25,22 @@ $(BUILD_DIR):
 $(BUILD_DIR)/boot.o: src/boot.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(BUILD_DIR)/kernel.o: src/kernel.c src/vga.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel.o: src/kernel.c src/vga.h src/idt.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/vga.o: src/vga.c src/vga.h src/io.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(KERNEL): $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o src/linker.ld
-	$(LD) $(LDFLAGS) -o $@ $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o
+$(BUILD_DIR)/isr.o: src/isr.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD_DIR)/idt.o: src/idt.c src/idt.h src/vga.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(KERNEL): $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o \
+           $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o src/linker.ld
+	$(LD) $(LDFLAGS) -o $@ $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o \
+	      $(BUILD_DIR)/vga.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o
 
 iso: $(ISO)
 

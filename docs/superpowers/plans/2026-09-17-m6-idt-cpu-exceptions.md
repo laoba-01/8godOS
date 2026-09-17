@@ -18,7 +18,7 @@
 - **不依赖 `.bss` 为 0**（`_start64` 没有清 BSS 的代码）。
 - `regs_t` 字段顺序与 common stub 的压栈顺序**严格一致**，用 `_Static_assert` 守。
 - 两种异常路径的压栈总量都是 **20 qword**（偶数）——16 字节对齐靠这个性质保持，common stub 里要写注释记下来。
-- panic 输出是**固定格式文本**，落在显存里；取证一律 `memsave 0xb8000 4000` + `python build/decode_vga.py`，**不新增取证脚本**。
+- panic 输出是**固定格式文本**，落在显存里；取证一律 `memsave 0xb8000 4000` + `python3 tools/decode_vga.py`，**不新增取证脚本**。
 - **一次运行只验一条用例**：异常处理器返回不到故障指令之后（`iretq` 会重新执行那条出错指令）。
 
 ---
@@ -60,7 +60,7 @@ vga_printf("A=%c S=%s P=%%\n", 'x', "str");
 make && make iso
 { sleep 8; echo 'memsave 0xb8000 4000 build/m6.bin'; sleep 0.3; echo quit; } \
   | qemu-system-x86_64 -cdrom build/os.iso -display none -monitor stdio -no-reboot -m 256
-python build/decode_vga.py build/m6.bin
+python3 tools/decode_vga.py build/m6.bin
 ```
 
 Expected: 第 0 行是空的或只有 `Hello, kernel!` 系列原内容 —— 自测那行**打不出来**（`vga_printf` 是空壳）。这就是本任务要让它变绿的那个红。
@@ -243,7 +243,7 @@ Expected: 输出里 `IDT=` 那一行的 base **等于 `nm` 查到的地址**，l
 ```bash
 { sleep 8; echo 'memsave 0xb8000 4000 build/m6.bin'; sleep 0.3; echo quit; } \
   | qemu-system-x86_64 -cdrom build/os.iso -display none -monitor stdio -no-reboot -m 256
-python build/decode_vga.py build/m6.bin
+python3 tools/decode_vga.py build/m6.bin
 ```
 
 Expected: 屏幕上出现 `EXCEPTION 0x00`。

@@ -1,5 +1,6 @@
 #include "vga.h"
 #include "io.h"
+#include <stdarg.h>
 
 /* VGA 文本缓冲与终端状态 */
 static volatile uint16_t *vga_buffer = (volatile uint16_t *)0xB8000;
@@ -103,7 +104,135 @@ void vga_puts(const char *s) {
     }
 }
 
+/*
+ * 把无符号数按 base 进制吐出去, 不足 width 位时在高位补 pad 字符。
+ * 先把数字从低位到高位收进 digits, 再补 pad, 最后从高位往低位吐。
+ */
+static void vga_put_uint(uint64_t value, unsigned base, int width, char pad) {
+    char digits[24];   /* 10 进制下 uint64 最长 20 位, 24 够 */
+    int n = 0;
+
+    if (value == 0) {
+        digits[n++] = '0';
+    } else {
+        while (value > 0) {
+            unsigned d = (unsigned)(value % base);
+            digits[n++] = (char)(d < 10 ? '0' + d : 'a' + (d - 10));
+            value /= base;
+        }
+    }
+
+    for (int i = n; i < width; i++) {
+        vga_putchar(pad);
+    }
+    while (n > 0) {
+        vga_putchar(digits[--n]);
+    }
+}
+
+/*
+ * 最小格式化输出。支持:
+ *   转换:     %c %s %d %u %x %p %%
+ *   长度修饰: l / ll / z —— 三者都按 64 位取值
+ *             (x86_64 上 long / long long / size_t 都是 64 位)
+ *   标志:     只支持 '0'(零填充), 只配十进制宽度
+ * 解析顺序: % → 可选 '0' → 可选十进制宽度 → 可选长度修饰符 → 转换字符
+ *
+ * 两处刻意不同于 glibc, 为的是行为确定、可比对:
+ *   - %p 固定打 0x + 16 位零填充(glibc 打 (nil))
+ *   - 宽度只计数字位, 负号不算在宽度内
+ * 不做左对齐 / 精度 / 浮点。
+ *
+ * -nostdlib 下没有 vsnprintf 可用, 只能自己 va_arg 逐字符吐到 vga_putchar。
+ */
 void vga_printf(const char *fmt, ...) {
-    /* TODO —— 第 6 步再实现 */
-    (void)fmt;
+    va_list ap;
+    va_start(ap, fmt);
+
+    for (const char *p = fmt; *p != '\0'; p++) {
+        if (*p != '%') {
+            vga_putchar(*p);
+            continue;
+        }
+
+        /* 跳过 '%'; 此后 p 指向标志位 */
+        p++;
+
+        int zero_pad = 0;
+        if (*p == '0') {
+            zero_pad = 1;
+            p++;
+        }
+
+        int width = 0;
+        while (*p >= '0' && *p <= '9') {
+            width = width * 10 + (*p - '0');
+            p++;
+        }
+
+        int is64 = 0;
+        if (*p == 'l' || *p == 'z') {
+            is64 = 1;
+            p++;
+            if (*p == 'l') {   /* ll */
+                p++;
+            }
+        }
+
+        char pad = zero_pad ? '0' : ' ';
+
+        switch (*p) {
+            case 'c':
+                /* char 经默认实参提升成了 int, 必须按 int 取 */
+                vga_putchar((char)va_arg(ap, int));
+                break;
+
+            case 's':
+                vga_puts(va_arg(ap, const char *));
+                break;
+
+            case '%':
+                /* 字面 '%': 不消耗变参。这一路取错, 后面全错位 */
+                vga_putchar('%');
+                break;
+
+            case 'd': {
+                int64_t sv = is64 ? va_arg(ap, int64_t) : (int64_t)va_arg(ap, int);
+                if (sv < 0) {
+                    vga_putchar('-');
+                    vga_put_uint((uint64_t)(~sv) + 1, 10, width, pad);  /* 取反加一, INT64_MIN 也不溢出 */
+                } else {
+                    vga_put_uint((uint64_t)sv, 10, width, pad);
+                }
+                break;
+            }
+
+            case 'u': {
+                uint64_t uv = is64 ? va_arg(ap, uint64_t) : (uint64_t)va_arg(ap, unsigned int);
+                vga_put_uint(uv, 10, width, pad);
+                break;
+            }
+
+            case 'x': {
+                uint64_t xv = is64 ? va_arg(ap, uint64_t) : (uint64_t)va_arg(ap, unsigned int);
+                vga_put_uint(xv, 16, width, pad);
+                break;
+            }
+
+            case 'p':
+                vga_puts("0x");
+                vga_put_uint((uint64_t)va_arg(ap, void *), 16, 16, '0');
+                break;
+
+            default:
+                /* 未实现的转换符: 静默跳过, 不吐乱码 */
+                break;
+        }
+
+        if (*p == '\0') {
+            break;   /* 格式串以 '%' 收尾: 别让 for 的 p++ 越过 '\0' */
+        }
+    }
+
+    va_end(ap);
 }

@@ -1,3 +1,9 @@
+; 来源声明 —— 详见 docs/AI-使用记录.md
+;   队员编写: M1/M2 的引导流程(multiboot2 头 / GDT / 长模式切换 / 页表)。
+;   AI 生成: M7 (2026-10-11) 把引导期结构(pml4/pdpt/pd/内核栈)从 .bss
+;            迁入 .bootstrap 段, 并在 _start64 里清真正的 .bss。
+;   队员验证: nm 核对 __bss_start 边界; QEMU 启动输出与 M6 一致。
+;
 section .multiboot2
 align 8
 
@@ -14,6 +20,8 @@ multiboot2_header_end:
 section .text
 bits 32
 global _start
+extern __bss_start      ; 由 linker.ld 定义(是符号, 不是变量)
+extern __bss_end
 
 _start:
     cli
@@ -88,7 +96,17 @@ _start64:
    mov gs, ax
    mov ss, ax
 
-   extern kmain 
+   ; M7: 清真正的 .bss(idt[256]、将来的键盘环形缓冲等)。
+   ; 边界由 linker.ld 夹住 —— 页表与内核栈住在 .bootstrap 段, 不在此范围内。
+   ; 此刻分页已开: 万一边界夹到 pd, 第一轮就把 2MB 大页条目写 0,
+   ; 下一条取指即 #PF(而 IDT 还没装) → triple fault 黑屏重启。
+   mov rdi, __bss_start
+   mov rcx, __bss_end
+   sub rcx, rdi            ; 待清字节数
+   xor eax, eax            ; al = 0
+   rep stosb
+
+   extern kmain
    call kmain
 .halt64:
       hlt
@@ -103,7 +121,7 @@ section .rodata          ; 第 3 段：只读数据
       dw gdt64_end - gdt64 - 1
       dd gdt64
 
-section .bss
+section .bootstrap nobits write
 align 4096
 pml4:  resb 4096
 pdpt:  resb 4096

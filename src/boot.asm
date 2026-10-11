@@ -98,8 +98,9 @@ _start64:
 
    ; M7: 清真正的 .bss(idt[256]、将来的键盘环形缓冲等)。
    ; 边界由 linker.ld 夹住 —— 页表与内核栈住在 .bootstrap 段, 不在此范围内。
-   ; 此刻分页已开: 万一边界夹到 pd, 第一轮就把 2MB 大页条目写 0,
-   ; 下一条取指即 #PF(而 IDT 还没装) → triple fault 黑屏重启。
+   ; 此刻分页已开, 边界夹错的后果已用负对照实测(把 __bss_start 挪到 .bootstrap 之前):
+   ; 循环先清掉 pml4, 紧邻的下一页表页(pdpt)随即失去映射, 写到它时即 #PF(CR2=0x103000);
+   ; 此刻 IDT 还没装, 异常投递本身又失败 → #DF → triple fault(黑屏重启)。
    mov rdi, __bss_start
    mov rcx, __bss_end
    sub rcx, rdi            ; 待清字节数

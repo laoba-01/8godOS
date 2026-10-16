@@ -15,12 +15,21 @@
 /*
  * 异常入口的栈帧。字段顺序 == 内存顺序(从低地址往高):
  *
- *     [15 个通用寄存器][向量号][错误码/0][rip][cs][rflags]
+ *     [15 个通用寄存器][向量号][错误码/0][rip][cs][rflags] || [rsp][ss]
+ *     └─────────── regs_t: 20 qword = 160 B ───────────┘    └ CPU 压的 2 个 ┘
  *
  * 低地址那 15 个是 common stub 压的, 后面 5 个是 stub / CPU 压的。
- * ring0 下 CPU 不压 RSP 和 SS, 所以这里没有这两个字段 ——
- * 若要显示"被打断的 rsp", 用 (uint64_t)&r->rflags + 8 从栈帧推算,
- * 那是算出来的, 不是 CPU 压栈字段。
+ *
+ * **长模式下 SS:RSP 是无条件压栈的**, 与是否发生特权级切换无关
+ * (Intel SDM Vol.3 §5.14; AMD APM Vol.2 §8.9.3)。32 位模式才是"仅 CPL 变化时压"
+ * —— M6 早期这里按 32 位的旧印象写成"ring0 下 CPU 不压 RSP 和 SS", 是错的。
+ * 所以**完整栈帧是 22 qword = 176 字节**, 而 regs_t 只覆盖前 20 qword:
+ * 那 2 个字段结构体里没有, 要读用 (uint64_t)&r->rflags + 8 / + 16 从栈帧取
+ * (即 (uint64_t *)r + 20 / + 21) —— 但它们是**货真价实的 CPU 压栈字段**,
+ * 不是"推算出来的值"。
+ *
+ * (CPU 压栈前会先把 RSP 向下 16 字节对齐, 因为旧 RSP 被压进栈、IRETQ 会原样恢复;
+ *  这是"总压栈必须是 16 的倍数"这条约束的起点。)
  *
  * 谁改了字段顺序、或在 common stub 里多压一个寄存器,
  * 下面那组 _Static_assert 会在编译期炸, 不用等到某个异常打出一串莫名其妙的 RIP。
@@ -38,7 +47,7 @@ _Static_assert(offsetof(regs_t, error_code) == 16 * 8, "同上");
 _Static_assert(offsetof(regs_t, rip)        == 17 * 8, "同上");
 _Static_assert(offsetof(regs_t, cs)         == 18 * 8, "同上");
 _Static_assert(offsetof(regs_t, rflags)     == 19 * 8, "同上");
-_Static_assert(sizeof(regs_t)               == 160,    "栈帧大小应为 20 qword");
+_Static_assert(sizeof(regs_t)               == 160,    "regs_t 应为 20 qword(完整栈帧 22, 另 2 个见上)");
 
 /* 64 位中断门描述符(Intel 手册 Vol.3 图 6-8) */
 typedef struct {

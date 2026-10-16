@@ -2,7 +2,12 @@
  * 来源声明 —— 详见 docs/AI-使用记录.md
  *   队员编写: M3 的 kmain 与 vga_puts() 调用。
  *   AI 生成: M5 结构调整后的版本(2026-09-15); M6 的 idt_init() 调用与
- *            异常用例开关 m6_trigger() / M6_CASE(2026-09-17)。
+ *            异常用例开关 m6_trigger() / M6_CASE(2026-09-17);
+ *            M7 (2026-10-12) 软件中断探路开关 m7_probe() / M7_CASE。
+ *   AI 删除: 2026-10-13 应队员要求删去 kmain 开头的 M5 遗留输出 —— 两行
+ *            vga_printf 自检(原先逐条过 %c/%s/%%/%d/%u/%x/%X/%p)与
+ *            "M5: VGA terminal" 一行。副作用: 启动路径上不再有非十六进制
+ *            转换符的回归覆盖, 需要时从 git 取回即可。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
@@ -18,6 +23,28 @@
  *   3 = #GP 越界段选择子   4 = #PF 读未映射地址
  */
 #define M6_CASE 0
+
+/*
+ * M7 探路开关 —— 用**软件中断**验证分发路径, 不需要 PIC、不需要 sti。
+ *
+ * 原理: `int $0x21` 是 CPU 自己产生的, 但它和硬件 IRQ1 走的是**同一条路** ——
+ * 查同一张 IDT、进同一个 stub(第 33 号)、同一个 common、同一个 isr_handler。
+ * 唯一的分岔点是"谁把向量号送进 CPU": 软件指令给立即数, 8259A 给 IRQ 号+ICW2 偏移。
+ * 所以这一步能先把软件侧全部验通, 再引入硬件的不确定性(重映射、屏蔽、EOI)。
+ *
+ *   0 = 不触发(默认)
+ *   1 = int $0x21 → IRQ1, 有注册(Task 2 验分发通路 / Task 3 验注册生效)
+ *   2 = int $0x22 → IRQ2, 没注册(Task 3 验未注册不炸)
+ */
+#define M7_CASE 0
+
+static void m7_probe(void) {
+#if M7_CASE == 1
+    __asm__ volatile ("int $0x21");
+#elif M7_CASE == 2
+    __asm__ volatile ("int $0x22");
+#endif
+}
 
 static void m6_trigger(void) {
 #if M6_CASE == 1
@@ -44,14 +71,11 @@ void kmain(void) {
     vga_clear();
     idt_init();
 
-    vga_printf("A=%c S=%s P=%%\n", 'x', "str");
-    vga_printf("d=%d u=%u x=%x X=%016lx p=%p w=%010lu\n",
-               -42, 42u, 0xdeadbeef, 0x1234ul, (void *)0xb8000, 7ul);
     vga_puts("Hello, kernel!\n");
     vga_puts("This is 8GodOS\n");
-    vga_puts("M5: VGA terminal\n");
 
     m6_trigger();
+    m7_probe();
 
     for (;;) { __asm__ volatile("hlt"); }
 }

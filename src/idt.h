@@ -1,6 +1,7 @@
 /*
  * 来源声明 —— 详见 docs/AI-使用记录.md
- *   AI 生成: 本文件全部内容(2026-09-17, M6)。
+ *   AI 生成: 本文件全部内容(2026-09-17, M6);
+ *            M7 (2026-10-12) 加 IDT_IRQ_BASE / IDT_IRQ_LAST / IDT_IRQ_COUNT。
  *   队员验证: regs_t 的字段顺序契约由 _Static_assert 在编译期强制;
  *             四条用例的 rip/cs/rflags 取值与预期相符。
  */
@@ -51,6 +52,17 @@ typedef struct {
 } __attribute__((packed)) idt_entry_t;
 
 _Static_assert(sizeof(idt_entry_t) == 16, "IDT 门描述符必须是 16 字节");
+
+/*
+ * 外部中断(IRQ)占用的向量号区间。
+ *
+ * 出厂时 8259A 把 IRQ0~7 映射在向量 0x08~0x0F, 正好压在 #DF/#TS/#NP/#SS/#GP/#PF
+ * 这些 CPU 异常上 —— 所以用之前**必须重映射**, 让 IRQ0~15 整体挪到 32~47。
+ * 这里是"软件侧的地址"; 硬件侧的落点由 pic.c 的 ICW2 决定, 两边必须一致。
+ */
+#define IDT_IRQ_BASE  32                              /* IRQ0 */
+#define IDT_IRQ_LAST  47                              /* IRQ15 */
+#define IDT_IRQ_COUNT (IDT_IRQ_LAST - IDT_IRQ_BASE + 1)   /* 16 条线 */
 
 void idt_init(void);
 

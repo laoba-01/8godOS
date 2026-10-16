@@ -1,6 +1,7 @@
 # 来源声明 —— 详见 docs/AI-使用记录.md
 #   队员编写: M1 的初始版本、M4 的构建目标。
-#   AI 生成: 2026-09-14/09-15(M5 的 vga.o 规则)、2026-09-17(M6 的 isr.o / idt.o 规则与链接项)。
+#   AI 生成: 2026-09-14/09-15(M5 的 vga.o 规则)、2026-09-17(M6 的 isr.o / idt.o 规则与链接项)、
+#            2026-10-12(M7 的 irq.o 规则与链接项)。
 
 AS := nasm
 CC := gcc
@@ -38,13 +39,16 @@ $(BUILD_DIR)/vga.o: src/vga.c src/vga.h src/io.h | $(BUILD_DIR)
 $(BUILD_DIR)/isr.o: src/isr.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(BUILD_DIR)/idt.o: src/idt.c src/idt.h src/vga.h | $(BUILD_DIR)
+$(BUILD_DIR)/idt.o: src/idt.c src/idt.h src/irq.h src/vga.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/irq.o: src/irq.c src/irq.h src/idt.h src/vga.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL): $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o \
-           $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o src/linker.ld
+           $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/irq.o src/linker.ld
 	$(LD) $(LDFLAGS) -o $@ $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o \
-	      $(BUILD_DIR)/vga.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o
+	      $(BUILD_DIR)/vga.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/irq.o
 
 iso: $(ISO)
 

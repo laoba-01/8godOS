@@ -1,7 +1,9 @@
 ; 来源声明 —— 详见 docs/AI-使用记录.md
-;   AI 生成: 本文件全部内容(2026-09-17, M6)。
+;   AI 生成: 本文件全部内容(2026-09-17, M6);
+;            M7 (2026-10-12) 表从 32 扩到 48、补 32~47 的 ISR_NOERR stub。
 ;   队员验证: 以 QEMU 取证四条用例(#DE/#UD/#GP/#PF)并逐字比对 panic 输出;
-;             以 nm + `info registers` 核对 IDT base/limit。
+;             以 nm + `info registers` 核对 IDT base/limit;
+;             M7: nm 取 isr_stub_33 地址, 与 QEMU 里 IDT 第 33 项拼出的 offset 比对。
 ;
 ; 异常 stub: 把 (向量号, 错误码) 压成规整栈帧, 再跳统一的 common stub 保存现场。
 ;
@@ -19,7 +21,7 @@ global isr_stub_table
 section .rodata
 isr_stub_table:
 %assign i 0
-%rep 32
+%rep 48                 ; 0~31 异常, 32~47 外部中断(IRQ0~15)
     dq isr_stub_ %+ i
 %assign i i+1
 %endrep
@@ -75,6 +77,28 @@ ISR_ERR   29    ; #VC VMM Communication
 ISR_ERR   30    ; #SX Security Exception
 ISR_NOERR 31    ; Reserved
 
+; 32~47: 外部中断(IRQ0~IRQ15), PIC 重映射后落在这 16 个向量上。
+; 硬件中断**一律不带错误码** —— 所以 16 个全走 ISR_NOERR, 宏补的 dummy 0
+; 正好补平与异常路径之间的差异。于是压栈总量仍是 20 qword(偶数),
+; M6 建立的 16 字节对齐假设**原样继续成立**。
+; (对照: 32 个异常里只有 10 个由 CPU 压错误码, 见文件头。)
+ISR_NOERR 32    ; IRQ0  定时器(本里程碑不解屏蔽)
+ISR_NOERR 33    ; IRQ1  键盘 —— M7 唯一要解屏蔽的那条线
+ISR_NOERR 34    ; IRQ2  级联(从片), 由 PIC 内部使用
+ISR_NOERR 35    ; IRQ3  串口 2
+ISR_NOERR 36    ; IRQ4  串口 1
+ISR_NOERR 37    ; IRQ5  并口 2 / 声卡
+ISR_NOERR 38    ; IRQ6  软驱
+ISR_NOERR 39    ; IRQ7  并口 1 / 伪中断(spurious)
+ISR_NOERR 40    ; IRQ8  RTC
+ISR_NOERR 41    ; IRQ9  可用
+ISR_NOERR 42    ; IRQ10 可用
+ISR_NOERR 43    ; IRQ11 可用
+ISR_NOERR 44    ; IRQ12 PS/2 鼠标
+ISR_NOERR 45    ; IRQ13 FPU
+ISR_NOERR 46    ; IRQ14 主 IDE
+ISR_NOERR 47    ; IRQ15 从 IDE
+
 isr_common:
     ; x86_64 没有 pusha/popa, 15 个通用寄存器手动压。
     ; 顺序必须与 regs_t 从低地址到高地址一致: regs_t 开头是 r15、结尾是 rax,
@@ -107,7 +131,8 @@ isr_common:
     call isr_handler
 
     ; ---- 恢复路径。M6 里 32 个向量全部 panic, 走不到这里;
-    ;      完整写出来, M7 加 PIC 时只差"加一张函数指针分发表"这一步。 ----
+    ;      M7 起 32~47 由 irq_dispatch 正常返回, **这条路第一次真的被走到** ——
+    ;      验证方式: 按一次键, 屏幕出现字符后内核仍在跑(而不是停死)。 ----
     pop r15
     pop r14
     pop r13

@@ -1,6 +1,8 @@
 /*
  * 来源声明 —— 详见 docs/AI-使用记录.md
- *   队员编写: M3 的 kmain 与 vga_puts() 调用。
+ *   队员编写: M3 的 kmain 与 vga_puts() 调用;
+ *             2026-10-19 M7 Task 3 的 my_probe() 与 irq_register() 调用
+ *             (逐行带写; 验收时 AI 临时将 M7_CASE 置 1/2, 已复位为 0)。
  *   AI 生成: M5 结构调整后的版本(2026-09-15); M6 的 idt_init() 调用与
  *            异常用例开关 m6_trigger() / M6_CASE(2026-09-17);
  *            M7 (2026-10-12) 软件中断探路开关 m7_probe() / M7_CASE。
@@ -13,6 +15,7 @@
 
 #include "vga.h"
 #include "idt.h"
+#include "irq.h"
 
 /*
  * M6 用例开关。一次运行只能验一条:
@@ -66,6 +69,12 @@ static void m6_trigger(void) {
     (void)v;
 #endif
 }
+/* 临时探针: M7 Task 3 验收"注册 → 分发 → 调用"整条通。
+   Task 5 会删掉它, 换成真正的 keyboard_handler。 */
+static void my_probe(regs_t *r) {
+    (void)r;
+    vga_puts("my_probe called\n");
+}
 
 void kmain(void) {
     vga_clear();
@@ -75,6 +84,7 @@ void kmain(void) {
     vga_puts("This is 8GodOS\n");
 
     m6_trigger();
+    irq_register(1, my_probe);
     m7_probe();
 
     for (;;) { __asm__ volatile("hlt"); }

@@ -1,7 +1,8 @@
 /*
  * 来源声明 —— 详见 docs/AI-使用记录.md
  *   AI 生成: 本文件全部内容(2026-10-12, M7)。
- *   队员验证: 待 Task 2 交接提问检验后补记。
+ *   队员验证: 接口在 Task 3 的实现与验收中确认;
+ *             Task 2 / Task 3 的交接提问仍待补(2026-10-20)。
  */
 
 #ifndef IRQ_H
@@ -18,6 +19,12 @@
  *   改函数签名比改实现贵得多。
  */
 typedef void (*isr_reg_t)(regs_t *r);
+
+/*
+ * 注册 IRQ 处理函数。irq 取 0~IDT_IRQ_COUNT-1(即 0~15);
+ * 越界时静默忽略。只在初始化阶段、sti 之前调用。
+ */
+void irq_register(uint8_t irq, isr_reg_t fn);
 
 /*
  * 中断/异常的 C 侧总入口, 由 isr.asm 的 common stub 调用。

@@ -10,12 +10,16 @@
  *            vga_printf 自检(原先逐条过 %c/%s/%%/%d/%u/%x/%X/%p)与
  *            "M5: VGA terminal" 一行。副作用: 启动路径上不再有非十六进制
  *            转换符的回归覆盖, 需要时从 git 取回即可。
+ *   AI 生成: 2026-10-20 (M7 Task 4) pic_init()/pic_unmask(1) 初始化序列、
+ *            临时的 IMR 打印与 sti;hlt 死循环; 同时删去 Task 3 的 my_probe
+ *            (真实 IRQ1 已接通, 探针会以 VGA 输出干扰中断上下文)。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
 #include "vga.h"
 #include "idt.h"
-#include "irq.h"
+#include "pic.h"
+#include "io.h"
 
 /*
  * M6 用例开关。一次运行只能验一条:
@@ -69,23 +73,41 @@ static void m6_trigger(void) {
     (void)v;
 #endif
 }
-/* 临时探针: M7 Task 3 验收"注册 → 分发 → 调用"整条通。
-   Task 5 会删掉它, 换成真正的 keyboard_handler。 */
-static void my_probe(regs_t *r) {
-    (void)r;
-    vga_puts("my_probe called\n");
-}
-
 void kmain(void) {
     vga_clear();
+
+    /*
+     * 初始化顺序不可颠倒: 装门 → 重映射 → 解屏蔽 → sti。
+     *   1. idt_init(): 32~47 号门先就位, 否则中断来了没有门可跳;
+     *   2. pic_init(): 把 IRQ 从出厂落点 0x08~0x0F 挪到 0x20~0x2F;
+     *   3. pic_unmask(1): 放行 IRQ1(键盘); 此刻 IF 仍是 0, 中断不会立刻来;
+     *   4. 主循环里的 sti: 真正开门。
+     * 反过来的话, 窗口期内硬件会按出厂落点发货 → IRQ 冒充 CPU 异常。
+     */
     idt_init();
+    pic_init();
+    pic_unmask(1);
 
     vga_puts("Hello, kernel!\n");
     vga_puts("This is 8GodOS\n");
 
+    /* 临时验收 A: 读 IMR(0x21), 期望 0xFD = 只有 IRQ1 解屏蔽。
+       Task 5 收尾时删掉这一行。 */
+    vga_printf("IMR=0x%02x\n", inb(PIC1_DATA));
+
     m6_trigger();
-    irq_register(1, my_probe);
     m7_probe();
 
-    for (;;) { __asm__ volatile("hlt"); }
+    /*
+     * Task 4 临时主循环: 只开中断并睡下, 等 IRQ1 进来。
+     * Task 5 会换成 kb_get() + vga_putchar() 的真正消费循环。
+     *
+     * sti 与 hlt 必须在同一条 asm、相邻执行:
+     * STI 后 CPU 有"中断影子"(下一条指令执行前不响应中断), 所以这两条
+     * 合起来是一个原子动作 —— 不会出现"刚开中断、还没睡下, 中断先到"
+     * 导致 hlt 睡死、缓冲里的字符没人取的情况。
+     */
+    for (;;) {
+        __asm__ volatile ("sti; hlt" ::: "memory");
+    }
 }

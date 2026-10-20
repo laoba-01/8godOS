@@ -7,10 +7,14 @@
  *             队员逐行键入代码。收尾的格式整理、注释与来源声明由 AI 完成。
  *   队员验证: M7_CASE=1 → my_probe called;
  *             M7_CASE=2 → unhandled IRQ 2 后内核继续运行。
- *   ⚠ 交接提问检验(2 题)顺延至 2026-10-20, 尚欠。
+ *   AI 生成: 2026-10-20 (M7 Task 4) 在 handler 之后补 pic_send_eoi() 调用 ——
+ *            原 Task 3 注释已写明"EOI 等 Task 4 引入 pic.c 后由 pic_send_eoi 发"。
+ *   交接提问检验: 2026-10-20 队员表示概念未掌握, 改为 AI 系统讲解;
+ *             检验本身未作答(见 docs/AI-使用记录.md 当日记录)。
  */
 
 #include "irq.h"
+#include "pic.h"
 #include "vga.h"
 
 /*
@@ -49,6 +53,10 @@ void irq_dispatch(regs_t *r) {
         vga_printf("unhandled IRQ %lu\n", (unsigned long)irq);
     }
 
-    /* EOI 不在这里发 —— 等 Task 4 引入 pic.c 后, 由 pic_send_eoi()
-       在 handler 之后调用。软件 int 不经过 8259A, 现在发也没有意义。 */
+    /* EOI 必须在 handler 之后 —— 先向设备确认(比如键盘读走 0x60),
+       再向 PIC 确认。提前发 = 活没干完就交收据, PIC 会提前放行下一条。
+       未注册的路径也要发: 否则 ISR 位一直亮着, 那条线和更低优先级的线全被堵死。
+       软件 int(如 int $0x21)不经过 8259A, 这里发 EOI 无害 ——
+       非特定 EOI 只会清"当前在服务的最高优先级位", 没有在服务的就什么都不做。 */
+    pic_send_eoi((uint8_t)irq);
 }

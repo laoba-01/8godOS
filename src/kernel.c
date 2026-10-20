@@ -13,13 +13,16 @@
  *   AI 生成: 2026-10-20 (M7 Task 4) pic_init()/pic_unmask(1) 初始化序列、
  *            临时的 IMR 打印与 sti;hlt 死循环; 同时删去 Task 3 的 my_probe
  *            (真实 IRQ1 已接通, 探针会以 VGA 输出干扰中断上下文)。
+ *   AI 生成: 2026-10-20 (M7 Task 5) keyboard_init() 调用、真正的消费主循环;
+ *            删去 Task 4 的临时 IMR 打印与 Task 3 的软件中断探路开关
+ *            (M7_CASE/m7_probe) —— 键盘已接通, 不需要再用 int $0x21 探路。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
 #include "vga.h"
 #include "idt.h"
 #include "pic.h"
-#include "io.h"
+#include "keyboard.h"
 
 /*
  * M6 用例开关。一次运行只能验一条:
@@ -30,28 +33,6 @@
  *   3 = #GP 越界段选择子   4 = #PF 读未映射地址
  */
 #define M6_CASE 0
-
-/*
- * M7 探路开关 —— 用**软件中断**验证分发路径, 不需要 PIC、不需要 sti。
- *
- * 原理: `int $0x21` 是 CPU 自己产生的, 但它和硬件 IRQ1 走的是**同一条路** ——
- * 查同一张 IDT、进同一个 stub(第 33 号)、同一个 common、同一个 isr_handler。
- * 唯一的分岔点是"谁把向量号送进 CPU": 软件指令给立即数, 8259A 给 IRQ 号+ICW2 偏移。
- * 所以这一步能先把软件侧全部验通, 再引入硬件的不确定性(重映射、屏蔽、EOI)。
- *
- *   0 = 不触发(默认)
- *   1 = int $0x21 → IRQ1, 有注册(Task 2 验分发通路 / Task 3 验注册生效)
- *   2 = int $0x22 → IRQ2, 没注册(Task 3 验未注册不炸)
- */
-#define M7_CASE 0
-
-static void m7_probe(void) {
-#if M7_CASE == 1
-    __asm__ volatile ("int $0x21");
-#elif M7_CASE == 2
-    __asm__ volatile ("int $0x22");
-#endif
-}
 
 static void m6_trigger(void) {
 #if M6_CASE == 1
@@ -73,34 +54,35 @@ static void m6_trigger(void) {
     (void)v;
 #endif
 }
+
 void kmain(void) {
     vga_clear();
 
     /*
-     * 初始化顺序不可颠倒: 装门 → 重映射 → 解屏蔽 → sti。
+     * 初始化顺序不可颠倒: 装门 → 重映射 → 解屏蔽 → 注册 handler → sti。
      *   1. idt_init(): 32~47 号门先就位, 否则中断来了没有门可跳;
      *   2. pic_init(): 把 IRQ 从出厂落点 0x08~0x0F 挪到 0x20~0x2F;
      *   3. pic_unmask(1): 放行 IRQ1(键盘); 此刻 IF 仍是 0, 中断不会立刻来;
-     *   4. 主循环里的 sti: 真正开门。
+     *   4. keyboard_init(): 把 keyboard_handler 注册到分发表的第 1 格;
+     *   5. 主循环里的 sti: 真正开门。
      * 反过来的话, 窗口期内硬件会按出厂落点发货 → IRQ 冒充 CPU 异常。
      */
     idt_init();
     pic_init();
     pic_unmask(1);
+    keyboard_init();
 
     vga_puts("Hello, kernel!\n");
     vga_puts("This is 8GodOS\n");
 
-    /* 临时验收 A: 读 IMR(0x21), 期望 0xFD = 只有 IRQ1 解屏蔽。
-       Task 5 收尾时删掉这一行。 */
-    vga_printf("IMR=0x%02x\n", inb(PIC1_DATA));
-
     m6_trigger();
-    m7_probe();
 
     /*
-     * Task 4 临时主循环: 只开中断并睡下, 等 IRQ1 进来。
-     * Task 5 会换成 kb_get() + vga_putchar() 的真正消费循环。
+     * 主循环 = 中断的下半部:
+     *   - 中断只负责把字符塞进环形缓冲(上半部, 越快越好);
+     *   - 这里负责取出来、调用 M5 的 vga_putchar 做真正的屏幕输出(慢活)。
+     *
+     * 缓冲非空时一次取干净, 然后 sti; hlt 睡到下一个中断。
      *
      * sti 与 hlt 必须在同一条 asm、相邻执行:
      * STI 后 CPU 有"中断影子"(下一条指令执行前不响应中断), 所以这两条
@@ -108,6 +90,12 @@ void kmain(void) {
      * 导致 hlt 睡死、缓冲里的字符没人取的情况。
      */
     for (;;) {
+        int c;
+
+        while ((c = kb_get()) >= 0) {
+            vga_putchar((char)c);
+        }
+
         __asm__ volatile ("sti; hlt" ::: "memory");
     }
 }

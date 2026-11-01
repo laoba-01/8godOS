@@ -2,6 +2,7 @@
 ;   队员编写: M1/M2 的引导流程(multiboot2 头 / GDT / 长模式切换 / 页表)。
 ;   AI 生成: M7 (2026-10-11) 把引导期结构(pml4/pdpt/pd/内核栈)从 .bss
 ;            迁入 .bootstrap 段, 并在 _start64 里清真正的 .bss。
+;            M8 (2026-11-01) 保存 multiboot2 指针(EBX → ESI)并经 RDI 传给 kmain。
 ;   队员验证: nm 核对 __bss_start 边界; QEMU 启动输出与 M6 一致。
 ;
 section .multiboot2
@@ -25,6 +26,10 @@ extern __bss_end
 
 _start:
     cli
+    ; M8: 保存 multiboot2 信息结构的物理地址。
+    ; EBX 在 cpuid 之后会被覆盖, 所以必须在第一次 cpuid 之前存进 ESI。
+    ; 32 位模式写 ESI 会把 RSI 高 32 位清零 —— 正好是 32 位物理地址。
+    mov esi, ebx
     cmp eax,0x36D76289
     jne .error
 pushfd
@@ -107,6 +112,9 @@ _start64:
    xor eax, eax            ; al = 0
    rep stosb
 
+   ; M8: kmain(uint64_t mb_info) —— ESI 是 _start 存下的 multiboot2 信息地址。
+   ; 必须放在清零循环之后: 循环用的 RDI 正是第一个参数的寄存器。
+   mov rdi, rsi
    extern kmain
    call kmain
 .halt64:

@@ -16,11 +16,13 @@
  *   AI 生成: 2026-10-20 (M7 Task 5) keyboard_init() 调用、真正的消费主循环;
  *            删去 Task 4 的临时 IMR 打印与 Task 3 的软件中断探路开关
  *            (M7_CASE/m7_probe) —— 键盘已接通, 不需要再用 int $0x21 探路。
+ *   AI 生成: 2026-11-01 (M8 Task 1) kmain 改为接收 multiboot2 指针并调用 pmm_init()。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
 #include "vga.h"
 #include "idt.h"
+#include "pmm.h"
 #include "pic.h"
 #include "keyboard.h"
 
@@ -55,19 +57,28 @@ static void m6_trigger(void) {
 #endif
 }
 
-void kmain(void) {
+void kmain(uint64_t mb_info) {
     vga_clear();
 
     /*
-     * 初始化顺序不可颠倒: 装门 → 重映射 → 解屏蔽 → 注册 handler → sti。
-     *   1. idt_init(): 32~47 号门先就位, 否则中断来了没有门可跳;
-     *   2. pic_init(): 把 IRQ 从出厂落点 0x08~0x0F 挪到 0x20~0x2F;
-     *   3. pic_unmask(1): 放行 IRQ1(键盘); 此刻 IF 仍是 0, 中断不会立刻来;
-     *   4. keyboard_init(): 把 keyboard_handler 注册到分发表的第 1 格;
-     *   5. 主循环里的 sti: 真正开门。
+     * 初始化顺序不可颠倒: 装门 → 解析内存 → 重映射 → 解屏蔽 → 注册 handler → sti。
+     *   1. idt_init(): 门先就位, 否则解析内存时一旦缺页没有门可跳;
+     *   2. pmm_init(): 解析 multiboot2 memory map(此时 IF=0, 不会被中断打断);
+     *   3. pic_init(): 把 IRQ 从出厂落点 0x08~0x0F 挪到 0x20~0x2F;
+     *   4. pic_unmask(1): 放行 IRQ1(键盘); 此刻 IF 仍是 0, 中断不会立刻来;
+     *   5. keyboard_init(): 把 keyboard_handler 注册到分发表的第 1 格;
+     *   6. 主循环里的 sti: 真正开门。
      * 反过来的话, 窗口期内硬件会按出厂落点发货 → IRQ 冒充 CPU 异常。
      */
     idt_init();
+
+    if (pmm_init(mb_info) != 0) {
+        vga_printf("M8: pmm_init failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
     pic_init();
     pic_unmask(1);
     keyboard_init();

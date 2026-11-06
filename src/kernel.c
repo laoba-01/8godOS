@@ -17,6 +17,7 @@
  *            删去 Task 4 的临时 IMR 打印与 Task 3 的软件中断探路开关
  *            (M7_CASE/m7_probe) —— 键盘已接通, 不需要再用 int $0x21 探路。
  *   AI 生成: 2026-11-01 (M8 Task 1) kmain 改为接收 multiboot2 指针并调用 pmm_init()。
+ *            2026-11-02 (M8 Task 2) keyboard_init() 之后调用 pmm_self_test()。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
@@ -82,6 +83,18 @@ void kmain(uint64_t mb_info) {
     pic_init();
     pic_unmask(1);
     keyboard_init();
+
+    /*
+     * M8 自检: 顺序 pmm → vm → heap。
+     * 放在 keyboard_init() 之后、主循环之前 —— 自检会分配帧、写图案,
+     * 此时中断链已就绪但不进主循环, 输出不会被键盘输入打断。
+     */
+    if (pmm_self_test() != 0) {
+        vga_printf("M8/PMM: self-test failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
 
     vga_puts("Hello, kernel!\n");
     vga_puts("This is 8GodOS\n");

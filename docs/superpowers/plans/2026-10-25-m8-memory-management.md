@@ -148,7 +148,9 @@ M8 新增的 `pmm_bitmap[32768]`(1GB / 4KB / 8)住在 `.bss`,把 `__bss_end` 推
 
 **目的:** M8 要在一套"已经验收过"的地基上开工。M7 的代码已提交,但收尾未做;M6 的实现层检验也还欠着。
 
-- [ ] **Step 1: 确认零警告基线**
+> **2026-11-06 状态:** 按 2026-11-01 新约定(学习回顾 / 补检 / 交接提问全部取消),Step 2~4 不再执行;`M7-串联.md` 也按新约定取消。Step 1 的零警告基线已于 2026-11-06 复验(`make -B`,仅剩 M5 遗留的两条 `ld` 警告);Step 5 的文档回填已随本次 docs 提交完成。Task 0 不单独提交。
+
+- [x] **Step 1: 确认零警告基线**
 
 ```bash
 cd /mnt/d/8GodOS
@@ -191,14 +193,16 @@ AI 在 M7 代码上**只改一行**,只给症状,作者定位。素材池(前两
 4. kmalloc 的块头、切分、合并、对齐;
 5. QEMU `info mem` / `info tlb` / `-d int` 各自能证明什么。
 
-- [ ] **Step 5: 回填文档**
+- [x] **Step 5: 回填文档**
 
 - `计划书.md` §M7:状态改 ✅;补「实施中踩到并解决的关键点」与「教训」(写实际踩到的);
 - `README.md` 进度表加 M7 行;
 - `docs/AI-使用记录.md`:M7 的 AI 参与范围、效率出口、尚未销的账(M6 实现层补检、M7 交接提问);
 - `docs/学习笔记/M7-串联.md`:作者亲手写。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
+
+> 2026-11-06:按新约定只回填 `计划书.md` / `README.md`,`M7-串联.md` 取消;不单独提交,并入本次 docs 提交。
 
 ```bash
 git add 计划书.md README.md docs/AI-使用记录.md docs/学习笔记/M7-串联.md
@@ -238,7 +242,7 @@ git commit -m "docs: M7 收尾 + M6 栈帧补检 + 学习笔记"
 - 只有 `type == 1` 表示可用 RAM;其它类型(ACPI、NVS、坏内存)本里程碑一律不用。
 - GRUB 通常把信息结构放在低 1MB 或内核之后,但不能假设它一定在 2MB 内。
 
-- [ ] **Step 1: 先写"信息指针能到 C"的最小验证(🟡)**
+- [x] **Step 1: 先写"信息指针能到 C"的最小验证(🟡)**
 
 `boot.asm` 保存 `EBX` → `ESI`;`_start64` 清零后 `mov rdi, rsi`;`kernel.c` 改成 `void kmain(uint64_t mb_info)` 并先打印 `mb_info`。
 
@@ -253,7 +257,7 @@ python3 tools/decode_vga.py build/m8_t1a.bin
 
 Expected: 屏幕上 `mb_info=0x0000000000xxxxxx`(非 0),内核仍正常启动。
 
-- [ ] **Step 2: 实现"信息结构所在 2MB 区间"的映射(🔴)**
+- [x] **Step 2: 实现"信息结构所在 2MB 区间"的映射(🔴)**
 
 在 `pmm.c` 里写一个只服务引导期的静态函数(不对外暴露):
 
@@ -271,7 +275,7 @@ ensure_2mb_mapped(addr, len)
 - 不覆盖已有的大页项。
 - 先映射 `[mb_info, mb_info + 8)` 读到 `total_size`,再映射 `[mb_info, mb_info + total_size)`。
 
-- [ ] **Step 3: 实现 `mb2_init`(🔴)**
+- [x] **Step 3: 实现 `mb2_init`(🔴)**
 
 按上面的 tag/mmap 格式遍历;把 `type == 1` 的区间复制进调用者数组;最多 `MB2_MAX_RANGES` 个;回填 `info_end`。
 **不打印、不分配** —— 打印留给 `pmm_init`。
@@ -282,7 +286,7 @@ ensure_2mb_mapped(addr, len)
 - mmap 的 `entry_size >= 24`;
 - 条目数 = `(tag.size - 16) / entry_size`。
 
-- [ ] **Step 4: 实现 `pmm_init` 的解析与打印(🟡)**
+- [x] **Step 4: 实现 `pmm_init` 的解析与打印(🟡)**
 
 顺序:
 
@@ -305,7 +309,7 @@ M8: usable=0x000000000ff00000 (~255 MB, 具体值随 QEMU memory map)
 
 - Step 4 起,`kmain` 不再直接打印 `mb_info`,而是调用 `pmm_init(mb_info)`;Step 1 的临时打印删掉。`pmm_init` 返回 -1 时打印错误并停机。
 
-- [ ] **Step 5: 验收 A —— 解析对,且不是写死**
+- [x] **Step 5: 验收 A —— 解析对,且不是写死**
 
 ```bash
 make && make iso
@@ -327,10 +331,11 @@ Expected:
 - 没有任何 `#PF`(屏幕不是 panic 输出)。
 
 - [ ] **Step 6: 验收 B —— 信息结构在 2MB 以外的负对照(可选,但推荐)**
+  > 2026-11-06:记录中无此负对照的实测证据,按诚实原则不勾。
 
 临时把 `ensure_2mb_mapped` 的调用注释掉,重跑。Expected: 若 GRUB 把信息放在 2MB 以外,会出现 `#PF`;若恰好仍在 2MB 内,本负对照观察不到 —— **诚实记录实测结果**,不要假装测到了。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/boot.asm src/mb2.h src/mb2.c src/pmm.h src/pmm.c src/kernel.c Makefile
@@ -359,7 +364,7 @@ git commit -m "M8: 保存 multiboot2 指针 + 解析 memory map"
   - `uint64_t pmm_total_count(void);`
   - `int pmm_self_test(void);` —— 0 通过,-1 失败
 
-- [ ] **Step 1: 位图初始化(🔴)**
+- [x] **Step 1: 位图初始化(🔴)**
 
 `static uint8_t pmm_bitmap[PMM_BITMAP_BYTES];` 住在 `.bss`(Task 0 已确认 `.bss` 会清零,但不要依赖它 —— 进函数先显式全置 1)。
 
@@ -377,7 +382,7 @@ git commit -m "M8: 保存 multiboot2 指针 + 解析 memory map"
 
 **为什么不是"先全 0,再把坏区间置 1"**:memory map 不一定枚举所有 MMIO 洞;未知区间必须默认不可用。反过来做,分配器可能把 VGA/BIOS 区或内核自己的页分出去。
 
-- [ ] **Step 2: 恒等映射扩展(🔴)**
+- [x] **Step 2: 恒等映射扩展(🔴)**
 
 用 `read_cr3()` 拿到 pml4 → `entry[0]` → pdpt → `entry[0]` → pd。
 从 memory map 求 `max_end` = 所有可用区间 `base + length` 的最大值,clamp 到 `PMM_MAX_PHYS`。
@@ -387,13 +392,13 @@ git commit -m "M8: 保存 multiboot2 指针 + 解析 memory map"
 
 - **为什么必须做**:分配器会返回 2MB 以上的帧;没有映射,写它立刻 `#PF`,分配出来也用不了。
 
-- [ ] **Step 3: `pmm_alloc_frame` / `pmm_free_frame`(🔴)**
+- [x] **Step 3: `pmm_alloc_frame` / `pmm_free_frame`(🔴)**
 
 - alloc:从 `pmm_hint` 开始扫描 0 位;找到就置 1、更新 hint、返回 `i * 4096`;扫到末尾再从头扫一遍;没有返回 0。
 - free:校验 4KB 对齐、`pa < PMM_MAX_PHYS`、位是 1;清 0;更新 hint 与空闲计数。非法输入直接忽略(不要 panic 在中断上下文里)。
 - `pmm_free_count` / `pmm_total_count` 只读。
 
-- [ ] **Step 4: 自检(🟡)**
+- [x] **Step 4: 自检(🟡)**
 
 `pmm_init` 要把 `mb_info` / `info_end` 存进 `pmm.c` 的 static 变量,供自检核对"分配出来的帧没有落进信息结构"。
 
@@ -421,7 +426,7 @@ M8/PMM: reuse PASS
 
 任何一条失败:打印 `M8/PMM: FAIL <原因>` 并停机。
 
-- [ ] **Step 5: 验收**
+- [x] **Step 5: 验收**
 
 ```bash
 make && make iso
@@ -432,11 +437,11 @@ python3 tools/decode_vga.py build/m8_t2.bin
 
 Expected: 上述输出全部 PASS;`max_pa > 0x200000`;两次 `-m 256` / `-m 512` 的 `free` 不同。
 
-- [ ] **Step 6: 负对照(必做一条)**
+- [x] **Step 6: 负对照(必做一条)**
 
 临时把保留内核镜像的那一行注释掉,重启。Expected: `pmm_self_test` 的"地址 `>= __bss_end`"检查失败,或写图案时立刻崩 —— **这证明保留区确实在起作用**。测完还原。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/pmm.c src/pmm.h src/kernel.c

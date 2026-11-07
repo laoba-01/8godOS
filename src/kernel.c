@@ -22,6 +22,8 @@
  *            自检顺序 pmm → vm。
  *            2026-11-07 (M8 Task 5) M6_CASE==4 的故障地址由 0x300000 改为
  *            0x40000000 —— M8 Task 2 的恒等映射扩展后 0x300000 已映射。
+ *            2026-11-07 (M8 Task 6) pmm_init() 之后调用 heap_init();
+ *            vm_self_test() 之后调用 heap_self_test()。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
@@ -29,6 +31,7 @@
 #include "idt.h"
 #include "pmm.h"
 #include "vm.h"
+#include "heap.h"
 #include "pic.h"
 #include "keyboard.h"
 
@@ -96,6 +99,15 @@ void kmain(uint64_t mb_info) {
         }
     }
 
+    /* 堆建在 VM_HEAP_BASE 的 16MB 虚拟区; 第一次写会走 #PF 补页。
+       放在 pic_unmask/sti 之前, 缺页期间不会被 IRQ 打断。 */
+    if (heap_init() != 0) {
+        vga_printf("M8: heap_init failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
     pic_init();
     pic_unmask(1);
     keyboard_init();
@@ -114,6 +126,13 @@ void kmain(uint64_t mb_info) {
 
     if (vm_self_test() != 0) {
         vga_printf("M8/VM: self-test failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
+    if (heap_self_test() != 0) {
+        vga_printf("M8/HEAP: self-test failed, halt\n");
         for (;;) {
             __asm__ volatile ("cli; hlt");
         }

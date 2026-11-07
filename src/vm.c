@@ -1,6 +1,8 @@
 /*
  * 来源声明 —— 详见 docs/AI-使用记录.md
- *   AI 生成: M8 Task 3 (2026-11-07) 四级页表遍历器 + vm_map/vm_unmap + TLB 失效 + 自检。
+ *   AI 生成: M8 Task 3 (2026-11-07) 四级页表遍历器 + vm_map/vm_unmap + TLB 失效 + 自检;
+ *            M8 Task 4 (2026-11-07) 地址空间创建(vm_create_space) + CR3 切换 +
+ *            每空间独立映射的自检。
  *
  * 本文件是虚拟层, 只回答一个问题: 虚拟地址怎么映射到物理帧?
  *   - 它不动位图(那是 pmm.c 的事), 只通过 pmm_alloc_frame 要页表页;
@@ -167,9 +169,56 @@ uint64_t vm_unmap(page_table_t *space, uint64_t va) {
     return old_pa;
 }
 
+page_table_t *vm_create_space(void) {
+    if (vm_kernel_space_ptr == 0) {
+        return 0;
+    }
+
+    uint64_t pa = pmm_alloc_frame();
+    if (pa == 0) {
+        return 0;
+    }
+
+    page_table_t *space = (page_table_t *)(uintptr_t)pa;
+
+    /* 新帧里是上一个使用者的垃圾, 必须逐项清零。 */
+    for (int i = 0; i < 512; i++) {
+        space->entry[i] = 0;
+    }
+
+    /*
+     * entry[0]: 低 1GB 恒等映射 —— 不复制的话, 切 CR3 后第一条取指就 #PF,
+     *           而此时 IDT 里的门也找不到, 直接 triple fault。
+     * entry[256..511]: 内核高半区(堆等)共享。
+     * entry[128] 故意不复制: 每个空间独立的测试区。
+     */
+    space->entry[0] = vm_kernel_space_ptr->entry[0];
+    for (int i = 256; i < 512; i++) {
+        space->entry[i] = vm_kernel_space_ptr->entry[i];
+    }
+
+    return space;
+}
+
+void vm_switch(page_table_t *space) {
+    if (space == 0) {
+        return;
+    }
+    /* 恒等映射下指针值就是物理地址。写 CR3 会刷新全部非全局 TLB 项。 */
+    vm_write_cr3((uint64_t)(uintptr_t)space);
+}
+
+void vm_switch_kernel(void) {
+    vm_switch(vm_kernel_space_ptr);
+}
+
 int vm_self_test(void) {
     page_table_t *ks = vm_kernel_space();
     int ok = 1;
+    page_table_t *a = 0;
+    page_table_t *b = 0;
+    uint64_t fa = 0;
+    uint64_t fb = 0;
 
     if (ks == 0) {
         vga_printf("M8/VM: FAIL no kernel space\n");
@@ -225,6 +274,76 @@ int vm_self_test(void) {
 
     vm_unmap(ks, VM_SCRATCH_BASE);
     pmm_free_frame(frame);
+
+    /*
+     * 地址空间隔离: A、B 各自映射同一个虚拟地址, 必须看到各自的值。
+     * 切 CR3 之后代码/栈/vga_printf 都靠 entry[0] 的恒等映射, 这正是
+     * vm_create_space 复制内核映射的理由。
+     */
+    if (ok) {
+        a = vm_create_space();
+        b = vm_create_space();
+        if (a == 0 || b == 0) {
+            vga_printf("M8/VM: FAIL create space\n");
+            ok = 0;
+        }
+    }
+
+    if (ok) {
+        fa = pmm_alloc_frame();
+        fb = pmm_alloc_frame();
+        if (fa == 0 || fb == 0) {
+            vga_printf("M8/VM: FAIL space alloc frame\n");
+            ok = 0;
+        }
+    }
+
+    if (ok) {
+        if (vm_map(a, VM_SPACE_TEST_BASE, fa, VM_PTE_PRESENT | VM_PTE_WRITE) != 0 ||
+            vm_map(b, VM_SPACE_TEST_BASE, fb, VM_PTE_PRESENT | VM_PTE_WRITE) != 0) {
+            vga_printf("M8/VM: FAIL space map\n");
+            ok = 0;
+        }
+    }
+
+    if (ok) {
+        vm_switch(a);
+        *(volatile uint64_t *)(uintptr_t)VM_SPACE_TEST_BASE = 0xAAAAAAAAAAAAAAAAULL;
+
+        vm_switch(b);
+        *(volatile uint64_t *)(uintptr_t)VM_SPACE_TEST_BASE = 0xBBBBBBBBBBBBBBBBULL;
+
+        vm_switch(a);
+        uint64_t va = *(volatile uint64_t *)(uintptr_t)VM_SPACE_TEST_BASE;
+
+        vm_switch(b);
+        uint64_t vb = *(volatile uint64_t *)(uintptr_t)VM_SPACE_TEST_BASE;
+
+        vm_switch_kernel();
+
+        if (va != 0xAAAAAAAAAAAAAAAAULL || vb != 0xBBBBBBBBBBBBBBBBULL) {
+            vga_printf("M8/VM: FAIL space A=%p B=%p\n",
+                       (void *)(uintptr_t)va, (void *)(uintptr_t)vb);
+            ok = 0;
+        } else {
+            vga_printf("M8/VM: space A=%p B=%p PASS\n",
+                       (void *)(uintptr_t)va, (void *)(uintptr_t)vb);
+        }
+    }
+
+    /* 只回收数据帧; 地址空间及其页表页按计划允许泄漏。 */
+    if (a != 0) {
+        vm_unmap(a, VM_SPACE_TEST_BASE);
+    }
+    if (b != 0) {
+        vm_unmap(b, VM_SPACE_TEST_BASE);
+    }
+    if (fa != 0) {
+        pmm_free_frame(fa);
+    }
+    if (fb != 0) {
+        pmm_free_frame(fb);
+    }
 
     return ok ? 0 : -1;
 }

@@ -1,7 +1,8 @@
 /*
  * 来源声明 —— 详见 docs/AI-使用记录.md
- *   AI 生成: M8 Task 3 (2026-11-07) 页表项标志、地址掩码、虚拟区常量与 vm_* 原型。
- *   (Task 4/5 会继续往这里加地址空间与 #PF 接口。)
+ *   AI 生成: M8 Task 3 (2026-11-07) 页表项标志、地址掩码、虚拟区常量与 vm_* 原型;
+ *            M8 Task 4 (2026-11-07) 地址空间创建/切换原型。
+ *   (Task 5 会继续往这里加 #PF 接口。)
  */
 #ifndef VM_H
 #define VM_H
@@ -47,6 +48,21 @@ int vm_map(page_table_t *space, uint64_t va, uint64_t pa, uint64_t flags);
 
 /* 拆除映射, 返回旧物理地址; 未映射返回 0。不释放物理帧。 */
 uint64_t vm_unmap(page_table_t *space, uint64_t va);
+
+/*
+ * 创建一个新地址空间(PML4)。
+ *   - 复制 kernel_space->entry[0](恒等映射), 否则切 CR3 后取指就 #PF;
+ *   - 复制 entry[256..511](内核高半区);
+ *   - 不复制 entry[128] —— 每空间独立测试区。
+ * 失败返回 NULL。本里程碑不做地址空间回收。
+ */
+page_table_t *vm_create_space(void);
+
+/* 写 CR3 切换地址空间(会刷新全部非全局 TLB 项)。 */
+void vm_switch(page_table_t *space);
+
+/* 切回内核地址空间。 */
+void vm_switch_kernel(void);
 
 int vm_self_test(void);
 

@@ -567,7 +567,7 @@ git commit -m "M8: 页表遍历器 + vm_map/vm_unmap + TLB 失效"
   - `void vm_switch(page_table_t *space);`
   - `void vm_switch_kernel(void);`
 
-- [ ] **Step 1: 创建空间(🔴)**
+- [x] **Step 1: 创建空间(🔴)**
 
 1. `pmm_alloc_frame()` 拿一帧作为 PML4;
 2. 清零;
@@ -577,12 +577,12 @@ git commit -m "M8: 页表遍历器 + vm_map/vm_unmap + TLB 失效"
 
 - **为什么必须复制**:不复制 `entry[0]`,切 CR3 后第一条取指就 `#PF`;此时 IDT 的门指向的内核代码也不在映射里 → `#DF` → triple fault。
 
-- [ ] **Step 2: 切换(🔴)**
+- [x] **Step 2: 切换(🔴)**
 
 - `vm_switch(space)`:写 CR3;写 CR3 会刷新全部非全局 TLB 项。
 - `vm_switch_kernel()`:`vm_switch(kernel_space)`。
 
-- [ ] **Step 3: 自检(🟡)**
+- [x] **Step 3: 自检(🟡)**
 
 1. `a = vm_create_space(); b = vm_create_space();`
 2. `fa = pmm_alloc_frame(); fb = pmm_alloc_frame();`
@@ -596,7 +596,7 @@ git commit -m "M8: 页表遍历器 + vm_map/vm_unmap + TLB 失效"
 
 - **关键**:第 4~8 步的代码、栈、`vga_printf` 都在恒等映射区,`a`/`b` 必须共享这些映射 —— 这正是 Step 1 的复制在保证的。
 
-- [ ] **Step 4: 验收**
+- [x] **Step 4: 验收**
 
 ```bash
 make && make iso
@@ -607,11 +607,11 @@ python3 tools/decode_vga.py build/m8_t4.bin
 
 Expected: `M8/VM: space A=0xAAAA... B=0xBBBB... PASS`;内核没有黑屏/重启。
 
-- [ ] **Step 5: 负对照(推荐)**
+- [x] **Step 5: 负对照(推荐)**
 
 临时不复制 `entry[0]`,重跑。Expected: 切 CR3 后立刻 triple fault(黑屏)。这证明"复制内核映射"不是形式主义。测完还原。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/vm.c src/vm.h src/kernel.c

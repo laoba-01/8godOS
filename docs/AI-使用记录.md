@@ -536,6 +536,7 @@ C:\Users\<用户>\.claude\projects\D--8GodOS\*.jsonl
 | 2026-11-02 | 本次会话 | **M8 Task 2（🔴：位图帧分配器、恒等映射扩展、`pmm_self_test`）** | 队员「接着写吧」→ AI 全写 `pmm.c`/`pmm.h` 并接上 `kernel.c` 自检，代跑 256/512/键盘验收与负对照。负对照实测：注释掉「保留内核镜像」后，自检打印 `FAIL frame inside kernel: 0x100000 < 0x115000` 并停机；测完已还原 |
 | 2026-11-07 | 本次会话 | **M8 Task 3（🔴：`vm_walk` 四级遍历器、`vm_map`/`vm_unmap`、`vm_init`）** | 队员「可以」→ 按新约定 AI 全写 `vm.c`/`vm.h`、接上 `kernel.c` 初始化序列并在 `pmm_self_test` 之后加 `vm_self_test`。按 TDD：先写自检并实测 `M8/VM: FAIL map`，再实现遍历器与 map/unmap，重跑四条全 PASS。`make` 零 gcc 警告，`ld` 仍是 M5 两条 |
 | 2026-11-07 | 本次会话 | **M8 Task 4（🔴：`vm_create_space`、`vm_switch`/`vm_switch_kernel`、空间隔离自检）** | 队员「继续 / 这个接着做啊」→ AI 全写地址空间创建与 CR3 切换，扩展 `vm_self_test`。TDD：先看 `M8/VM: FAIL create space`，再实现并看到 `space A=0xaaaa… B=0xbbbb… PASS`。负对照（不复制 `entry[0]`）实测按预测 triple fault：`v=0e` 在 `RIP=0x102644`、`CR2=0x102644`、`CR3=0x117000`，随后 `v=08`，`check_exception old: 0x8 new 0xe`；测完已还原并复验 PASS |
+| 2026-11-07 | 本次会话 | **M8 Task 5（🔴：`vm_handle_page_fault`、`idt.c` 的 #PF 分支、按需分页自检）** | 按计划 AI 全写 `#PF` 恢复与堆区按需分页。TDD：先看 `EXCEPTION 0x0E`、`cr2=0xffff800000fff000`，再实现处理器并实测 `demand fault c0=0 c1=1 c2=1 PASS`、`-d int` 恰好一次 `v=0e`；键盘回归 `sendkey h` 屏幕出 `h`。**发现计划冲突**：Step 5 原用 `0x300000` 验证「堆区外仍 panic」，但 M8 Task 2 已把恒等映射扩到可用 RAM，该地址现在有映射；`M6_CASE==4` 改用 `0x40000000`，实测 `cr2=0x40000000` 并 panic。计划已加订正注记 |
 
 **M7 分工表（2026-09-21 定）**：
 

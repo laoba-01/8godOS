@@ -641,7 +641,7 @@ git commit -m "M8: 地址空间 + CR3 切换 + 每空间独立映射"
 - CPU 压的 RIP 指向**出错的那条指令**;`iretq` 返回后会**重新执行**它 —— 这正是"补页后重试"的机制。
 - `regs_t` 的 `error_code` 字段就是 CPU 压的错误码。
 
-- [ ] **Step 1: 处理器骨架(🔴)**
+- [x] **Step 1: 处理器骨架(🔴)**
 
 规则:
 
@@ -669,7 +669,7 @@ fault_count++
 - 不调用可能再次缺页的堆函数。
 - 若当前 IF=1,键盘 IRQ 可能嵌套进来;`keyboard_handler` 只碰环形缓冲(`.bss`,已映射),不会碰堆,安全。**若将来有 IRQ 处理器也分配内存,这条要重新审。**
 
-- [ ] **Step 2: `idt.c` 分支(🔴)**
+- [x] **Step 2: `idt.c` 分支(🔴)**
 
 在 `isr_handler` 里、`EXCEPTION` 打印**之前**加:
 
@@ -681,7 +681,7 @@ if (r->vector == 14 && vm_handle_page_fault(r)) {
 
 `vector >= 32` 的 IRQ 分支保持原样;`< 32` 的非 `#PF` 异常仍 panic。
 
-- [ ] **Step 3: 自检(🟡)**
+- [x] **Step 3: 自检(🟡)**
 
 1. 记录 `c0 = vm_fault_count()`;
 2. 取堆区最后一页 `VM_HEAP_BASE + VM_HEAP_SIZE - 4096`,用 `volatile` 指针写入并读回;
@@ -689,7 +689,7 @@ if (r->vector == 14 && vm_handle_page_fault(r)) {
 4. 再写同一页,`c2` 应等于 `c1`(第二次不再缺页);
 5. 打印 `#PF` 次数与写读结果。
 
-- [ ] **Step 4: 验收 A —— 缺页真的发生了,而且恢复了**
+- [x] **Step 4: 验收 A —— 缺页真的发生了,而且恢复了**
 
 ```bash
 make && make iso
@@ -707,17 +707,19 @@ Expected:
 - `-d int` 日志里至少出现一次 `v=0e`,且发生在堆区地址;
 - 内核继续运行(不是 panic)。
 
-- [ ] **Step 5: 验收 B —— 堆区外的 `#PF` 仍然 panic(M6 回归)**
+- [x] **Step 5: 验收 B —— 堆区外的 `#PF` 仍然 panic(M6 回归)**
 
 把 `kernel.c` 的 `M6_CASE` 临时改成 `4`(读 `0x300000`),重跑并解码。
 
 Expected: 仍打出 `EXCEPTION 0x0E #PF Page Fault`、`cr2=0x0000000000300000`,然后停机。测完改回 `0`。
 
-- [ ] **Step 6: 验收 C —— 键盘回归**
+> **订正(2026-11-07 实测)**: M8 Task 2 已把恒等映射扩到可用 RAM(本机约 256MB),`0x300000` 现在**有映射**,读它不再触发 `#PF`。`M6_CASE == 4` 已改用 `0x40000000`(1GB 处,超出 memory map 的可用 RAM),实测打出 `cr2=0x0000000040000000` 并 panic;测完已改回 `0`。
+
+- [x] **Step 6: 验收 C —— 键盘回归**
 
 `sendkey h`,解码,Expected: 屏幕出现 `h`(按需缺页没有把 IRQ 路径弄坏)。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/vm.c src/vm.h src/idt.c src/kernel.c

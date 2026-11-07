@@ -537,6 +537,7 @@ C:\Users\<用户>\.claude\projects\D--8GodOS\*.jsonl
 | 2026-11-07 | 本次会话 | **M8 Task 3（🔴：`vm_walk` 四级遍历器、`vm_map`/`vm_unmap`、`vm_init`）** | 队员「可以」→ 按新约定 AI 全写 `vm.c`/`vm.h`、接上 `kernel.c` 初始化序列并在 `pmm_self_test` 之后加 `vm_self_test`。按 TDD：先写自检并实测 `M8/VM: FAIL map`，再实现遍历器与 map/unmap，重跑四条全 PASS。`make` 零 gcc 警告，`ld` 仍是 M5 两条 |
 | 2026-11-07 | 本次会话 | **M8 Task 4（🔴：`vm_create_space`、`vm_switch`/`vm_switch_kernel`、空间隔离自检）** | 队员「继续 / 这个接着做啊」→ AI 全写地址空间创建与 CR3 切换，扩展 `vm_self_test`。TDD：先看 `M8/VM: FAIL create space`，再实现并看到 `space A=0xaaaa… B=0xbbbb… PASS`。负对照（不复制 `entry[0]`）实测按预测 triple fault：`v=0e` 在 `RIP=0x102644`、`CR2=0x102644`、`CR3=0x117000`，随后 `v=08`，`check_exception old: 0x8 new 0xe`；测完已还原并复验 PASS |
 | 2026-11-07 | 本次会话 | **M8 Task 5（🔴：`vm_handle_page_fault`、`idt.c` 的 #PF 分支、按需分页自检）** | 按计划 AI 全写 `#PF` 恢复与堆区按需分页。TDD：先看 `EXCEPTION 0x0E`、`cr2=0xffff800000fff000`，再实现处理器并实测 `demand fault c0=0 c1=1 c2=1 PASS`、`-d int` 恰好一次 `v=0e`；键盘回归 `sendkey h` 屏幕出 `h`。**发现计划冲突**：Step 5 原用 `0x300000` 验证「堆区外仍 panic」，但 M8 Task 2 已把恒等映射扩到可用 RAM，该地址现在有映射；`M6_CASE==4` 改用 `0x40000000`，实测 `cr2=0x40000000` 并 panic。计划已加订正注记 |
+| 2026-11-07 | 本次会话 | **M8 Task 6（🔴：`heap_init`、`kmalloc`/`kfree`、`heap_self_test`）** | 按计划 AI 全写 `heap.c`/`heap.h`，接上 `kernel.c` 的 `heap_init()` 与自检。TDD：先看 `M8/HEAP: FAIL alloc`，再实现 first-fit + 切分 + 合并，实测 `align/overlap/pattern`、`oom`、`cross-page +24`、`coalesce (free=0xf0) PASS`。**负对照暴露计划测试的两处假通过**：① `d=kmalloc(200)` 对齐后 208、b 块单块就够；② 尾部巨大空闲块会直接满足 `d`。改为 `d=224` 且先占满尾部，负对照（删高地址合并）才正确失败（`free=0xe0`）。计划已加订正注记 |
 
 **M7 分工表（2026-09-21 定）**：
 

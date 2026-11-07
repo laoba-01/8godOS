@@ -761,7 +761,7 @@ block_t (16 字节,16 字节对齐):
 - 最后一个块的 `next` 正好等于 `arena_end`(哨兵靠边界判断,不额外放哨兵块);
 - 返回值 = `(uint8_t *)b + sizeof(block_t)`,天然 16 字节对齐。
 
-- [ ] **Step 1: `heap_init`(🟡)**
+- [x] **Step 1: `heap_init`(🟡)**
 
 在 `VM_HEAP_BASE` 写一个覆盖整个 16MB 的 free 块:
 
@@ -771,7 +771,7 @@ b->magic = MAGIC; b->free = 1; b->size = VM_HEAP_SIZE - sizeof(block_t);
 
 **这次写会触发第一次按需缺页** —— 这是 M8 的端到端演示:T6 的堆第一次落地,靠 T5 的处理器补页。
 
-- [ ] **Step 2: `kmalloc`(🔴)**
+- [x] **Step 2: `kmalloc`(🔴)**
 
 ```
 若 size == 0 → NULL
@@ -795,7 +795,7 @@ need = align_up(size, 16)
 - 不调用 `pmm_alloc_frame` —— 物理页由缺页处理器补。
 - 不用 `%`,用 `& ~15` / `+15` 做对齐。
 
-- [ ] **Step 3: `kfree`(🔴)**
+- [x] **Step 3: `kfree`(🔴)**
 
 ```
 若 ptr == NULL → 返回
@@ -814,11 +814,11 @@ b->free = 1
 - 合并只改 `size` 与 `free`,不搬数据。
 - 越界指针/坏 magic:`vga_printf` 报错并停机(学习期宁可炸响,不要静默)。
 
-- [ ] **Step 4: `heap_free_bytes`(🟡)**
+- [x] **Step 4: `heap_free_bytes`(🟡)**
 
 从 `heap_start` 走到 `arena_end`,累加 `b->free ? b->size : 0`。用于自检与诊断。
 
-- [ ] **Step 5: 自检(🟡)**
+- [x] **Step 5: 自检(🟡)**
 
 1. `a = kmalloc(16); b = kmalloc(200); c = kmalloc(1000);`
 2. 检查 `a/b/c != NULL`,且三者都 16 字节对齐、互不重叠(用 `[a, a+16)`、`[b, b+200)`、`[c, c+1000)` 两两不相交做必要条件);
@@ -839,7 +839,7 @@ M8/HEAP: oom PASS
 M8/HEAP: cross-page fault PASS (faults +N)
 ```
 
-- [ ] **Step 6: 验收**
+- [x] **Step 6: 验收**
 
 ```bash
 make && make iso
@@ -852,11 +852,17 @@ grep -c 'v=0e' build/m8_t6_int.log
 
 Expected: 所有 PASS;`v=0e` 出现多次(堆初始化 + 跨页测试),但内核没有 panic。
 
-- [ ] **Step 7: 负对照(必做一条)**
+- [x] **Step 7: 负对照(必做一条)**
 
 临时把向后合并的循环删掉,重跑自检。Expected: `coalesce`  FAIL(第 5 步 `d = kmalloc(200)` 失败)。测完还原。
 
-- [ ] **Step 8: Commit**
+> **订正(2026-11-07 实测)**: 原计划的合并测试会**假通过**, 实际改了三处:
+> 1. `d = kmalloc(224)`(不是 200): `kmalloc(200)` 对齐后需要 208, 而 b 块单独就有 208 字节, 不合并也能成功;
+> 2. 在释放 a/b 之前先 `kmalloc(heap_free_bytes())` 把尾部大空闲块占满; 否则 first-fit 会直接从尾部满足 `d`, 根本用不到 a+b 合并;
+> 3. 删的是"向高地址(next)合并"的循环。实测: 不合并 `free=0xe0`(16+208)且 `d` 失败; 合并 `free=0xf0`(240)且成功。
+> 自检顺序相应调整为 alloc 检查 → OOM → 跨页 → 占满尾部 → 合并测试。
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/heap.h src/heap.c src/kernel.c Makefile

@@ -2,7 +2,8 @@
 #   队员编写: M1 的初始版本、M4 的构建目标。
 #   AI 生成: 2026-09-14/09-15(M5 的 vga.o 规则)、2026-09-17(M6 的 isr.o / idt.o 规则与链接项)、
 #            2026-10-12(M7 的 irq.o 规则与链接项)、2026-10-20(M7 Task 4 的 pic.o、
-#            Task 5 的 keyboard.o)、2026-11-01(M8 Task 1 的 mb2.o / pmm.o)。
+#            Task 5 的 keyboard.o)、2026-11-01(M8 Task 1 的 mb2.o / pmm.o)、
+#            2026-11-07(M8 Task 3 的 vm.o 规则与链接项)。
 
 AS := nasm
 CC := gcc
@@ -31,7 +32,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/boot.o: src/boot.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(BUILD_DIR)/kernel.o: src/kernel.c src/vga.h src/idt.h src/pmm.h src/pic.h src/keyboard.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel.o: src/kernel.c src/vga.h src/idt.h src/pmm.h src/vm.h src/pic.h src/keyboard.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/vga.o: src/vga.c src/vga.h src/io.h | $(BUILD_DIR)
@@ -58,14 +59,17 @@ $(BUILD_DIR)/mb2.o: src/mb2.c src/mb2.h | $(BUILD_DIR)
 $(BUILD_DIR)/pmm.o: src/pmm.c src/pmm.h src/mb2.h src/vga.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/vm.o: src/vm.c src/vm.h src/pmm.h src/vga.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(KERNEL): $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o \
            $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/irq.o \
            $(BUILD_DIR)/pic.o $(BUILD_DIR)/keyboard.o \
-           $(BUILD_DIR)/mb2.o $(BUILD_DIR)/pmm.o src/linker.ld
+           $(BUILD_DIR)/mb2.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vm.o src/linker.ld
 	$(LD) $(LDFLAGS) -o $@ $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o \
 	      $(BUILD_DIR)/vga.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/idt.o \
 	      $(BUILD_DIR)/irq.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/keyboard.o \
-	      $(BUILD_DIR)/mb2.o $(BUILD_DIR)/pmm.o
+	      $(BUILD_DIR)/mb2.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vm.o
 
 iso: $(ISO)
 

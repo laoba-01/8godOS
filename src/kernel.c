@@ -18,12 +18,15 @@
  *            (M7_CASE/m7_probe) —— 键盘已接通, 不需要再用 int $0x21 探路。
  *   AI 生成: 2026-11-01 (M8 Task 1) kmain 改为接收 multiboot2 指针并调用 pmm_init()。
  *            2026-11-02 (M8 Task 2) keyboard_init() 之后调用 pmm_self_test()。
+ *            2026-11-07 (M8 Task 3) idt_init() 之后、pmm_init() 之前调用 vm_init();
+ *            自检顺序 pmm → vm。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
 #include "vga.h"
 #include "idt.h"
 #include "pmm.h"
+#include "vm.h"
 #include "pic.h"
 #include "keyboard.h"
 
@@ -73,6 +76,15 @@ void kmain(uint64_t mb_info) {
      */
     idt_init();
 
+    /* 只读 CR3 记录内核 PML4, 必须在 pmm_init 之前:
+       之后 #PF 处理器要靠一个有效的 kernel_space。 */
+    if (vm_init() != 0) {
+        vga_printf("M8: vm_init failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
     if (pmm_init(mb_info) != 0) {
         vga_printf("M8: pmm_init failed, halt\n");
         for (;;) {
@@ -91,6 +103,13 @@ void kmain(uint64_t mb_info) {
      */
     if (pmm_self_test() != 0) {
         vga_printf("M8/PMM: self-test failed, halt\n");
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
+    if (vm_self_test() != 0) {
+        vga_printf("M8/VM: self-test failed, halt\n");
         for (;;) {
             __asm__ volatile ("cli; hlt");
         }

@@ -534,6 +534,7 @@ C:\Users\<用户>\.claude\projects\D--8GodOS\*.jsonl
 | 2026-10-20 | 本次会话 | **M7 Task 5（🔴：`keyboard.c` 主体 + 主循环）** | 队员「直接做吗?」→ 确认效率出口；AI 全写 `keyboard.c`、主循环、`Makefile`，并代跑六条验收。M7 的最后一处 🔴 由此由 AI 完成 |
 | 2026-11-01 | 本次会话 | **M8 Task 1（🔴：`boot.asm` 指针传递、`mb2.c`、`pmm.c` 的映射与解析）** | 队员「开 M8」→ 按新约定：AI 全写、代跑验收，完成后给固定汇报。**工作模式同日变更**：队员因备考考研、学习主战场转向 rCore，主动取消 8GodOS 的串联笔记、交接提问与「埋错找 bug」，改为每任务完成后五段汇报（改动 / 验收 / 概念 / 408 考点 / rCore 对照） |
 | 2026-11-02 | 本次会话 | **M8 Task 2（🔴：位图帧分配器、恒等映射扩展、`pmm_self_test`）** | 队员「接着写吧」→ AI 全写 `pmm.c`/`pmm.h` 并接上 `kernel.c` 自检，代跑 256/512/键盘验收与负对照。负对照实测：注释掉「保留内核镜像」后，自检打印 `FAIL frame inside kernel: 0x100000 < 0x115000` 并停机；测完已还原 |
+| 2026-11-07 | 本次会话 | **M8 Task 3（🔴：`vm_walk` 四级遍历器、`vm_map`/`vm_unmap`、`vm_init`）** | 队员「可以」→ 按新约定 AI 全写 `vm.c`/`vm.h`、接上 `kernel.c` 初始化序列并在 `pmm_self_test` 之后加 `vm_self_test`。按 TDD：先写自检并实测 `M8/VM: FAIL map`，再实现遍历器与 map/unmap，重跑四条全 PASS。`make` 零 gcc 警告，`ld` 仍是 M5 两条 |
 
 **M7 分工表（2026-09-21 定）**：
 

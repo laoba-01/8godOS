@@ -480,13 +480,13 @@ git commit -m "M8: 位图帧分配器 + 恒等映射扩展到可用 RAM"
   - `int vm_self_test(void);`
 - Consumes: `pmm_alloc_frame` / `pmm_free_frame`(Task 2)
 
-- [ ] **Step 1: `vm_init` 与 CR3 读写(🟡)**
+- [x] **Step 1: `vm_init` 与 CR3 读写(🟡)**
 
 - `read_cr3` / `write_cr3` 内联汇编;
 - `vm_init`:`kernel_space = (page_table_t *)(read_cr3() & VM_ADDR_MASK); fault_count = 0;`
 - `vm_kernel_space` 返回它。
 
-- [ ] **Step 2: 四级遍历器(🔴)**
+- [x] **Step 2: 四级遍历器(🔴)**
 
 ```
 vm_walk(space, va, create) -> uint64_t *
@@ -504,7 +504,7 @@ vm_walk(space, va, create) -> uint64_t *
 - 任何一级遇到 `PS=1` 都返回 NULL(`vm_map` 据此拒绝)。
 - `invlpg(va)` 内联汇编:`invlpg (%0)`。
 
-- [ ] **Step 3: `vm_map` / `vm_unmap`(🔴)**
+- [x] **Step 3: `vm_map` / `vm_unmap`(🔴)**
 
 `vm_map` 规则:
 - `va`、`pa` 必须 4KB 对齐;
@@ -518,7 +518,7 @@ vm_walk(space, va, create) -> uint64_t *
 - 记录旧 `pa`,`*pte = 0`,`invlpg(va)`,返回旧 `pa`;
 - **不释放物理帧** —— 帧的归属由调用者决定(堆的帧由按需分页分配,暂不回收)。
 
-- [ ] **Step 4: 自检(🟡)**
+- [x] **Step 4: 自检(🟡)**
 
 1. `frame = pmm_alloc_frame()`;`vm_map(kernel_space, VM_SCRATCH_BASE, frame, P|RW)` 返回 0;
 2. `volatile uint64_t *p = (uint64_t *)VM_SCRATCH_BASE; *p = 0x1122334455667788;` 读回比对;
@@ -527,7 +527,7 @@ vm_walk(space, va, create) -> uint64_t *
 5. 重复映射:`vm_map` 同一 VA 返回 -1;
 6. 释放 `frame`。
 
-- [ ] **Step 5: 验收**
+- [x] **Step 5: 验收**
 
 ```bash
 make && make iso
@@ -545,7 +545,7 @@ Expected:
 - `info mem` 在自检运行期间/之后不再列出 `VM_SCRATCH_BASE`(自检最后 unmap 了);若想看到映射,把 `info mem` 放在 unmap 之前,或临时加一个不 unmap 的探针;
 - 写读值一致。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/vm.h src/vm.c src/kernel.c Makefile

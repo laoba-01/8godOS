@@ -5,6 +5,8 @@
  *            M7 Task 2 Step 4 (2026-10-13) isr_handler 的 `vector >= IDT_IRQ_BASE`
  *            分支 —— **原档位 🔴(队员写), 由队员走出效率出口「我只会写伪代码,
  *            真代码你来写吧」, AI 代写**。队员已给出 `>=` 的比较方向。
+ *   AI 生成: M8 Task 5 (2026-11-07) isr_handler 在 panic 之前加 #PF 恢复分支
+ *            (`vector == 14 && vm_handle_page_fault(r)`)。
  *   队员验证: 四条异常用例(#DE/#UD/#GP/#PF)的解码结果逐字比对;
  *             #GP 的 error=0x30 作为「错误码来自 CPU」的判别点。
  *   ⚠ 该分支的交接提问检验见 docs/AI-使用记录.md 第九节(2026-10-13 行)。
@@ -13,6 +15,7 @@
 #include "idt.h"
 #include "irq.h"
 #include "vga.h"
+#include "vm.h"
 
 /* stub 地址表, 由 isr.asm 生成 —— M7 起是 48 项(0~31 异常, 32~47 外部中断) */
 extern void *isr_stub_table[48];
@@ -136,6 +139,12 @@ void isr_handler(regs_t *r) {
     if (r->vector >= IDT_IRQ_BASE) {
         irq_dispatch(r);
         return;      /* 返回 common stub → pop 掉现场 → iretq 回到被打断的那条指令之后 */
+    }
+
+    /* #PF(14) 先问内存层能不能补页; 补上了就返回, iretq 会重试出错指令。
+       处理不了(堆区外/保护错误/重入)才落到下面的 panic。 */
+    if (r->vector == 14 && vm_handle_page_fault(r)) {
+        return;
     }
 
     vga_printf("EXCEPTION 0x%02lX %s\n",

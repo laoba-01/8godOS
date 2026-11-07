@@ -2,7 +2,8 @@
  * 来源声明 —— 详见 docs/AI-使用记录.md
  *   AI 生成: M8 Task 3 (2026-11-07) 四级页表遍历器 + vm_map/vm_unmap + TLB 失效 + 自检;
  *            M8 Task 4 (2026-11-07) 地址空间创建(vm_create_space) + CR3 切换 +
- *            每空间独立映射的自检。
+ *            每空间独立映射的自检;
+ *            M8 Task 5 (2026-11-07) #PF 恢复 + 堆区按需分页 + 缺页计数。
  *
  * 本文件是虚拟层, 只回答一个问题: 虚拟地址怎么映射到物理帧?
  *   - 它不动位图(那是 pmm.c 的事), 只通过 pmm_alloc_frame 要页表页;
@@ -19,9 +20,19 @@
 /* 内核地址空间(引导期用的 PML4), 所有地址空间都共享它的内核映射。 */
 static page_table_t *vm_kernel_space_ptr;
 
+/* #PF 统计与防重入标志: 处理器自己缺页时不能再进一次, 否则递归到 triple fault。 */
+static uint64_t vm_faults;
+static int vm_in_fault;
+
 static inline uint64_t vm_read_cr3(void) {
     uint64_t v;
     __asm__ volatile ("mov %%cr3, %0" : "=r"(v));
+    return v;
+}
+
+static inline uint64_t vm_read_cr2(void) {
+    uint64_t v;
+    __asm__ volatile ("mov %%cr2, %0" : "=r"(v));
     return v;
 }
 
@@ -35,6 +46,8 @@ static inline void vm_invlpg(uint64_t va) {
 
 int vm_init(void) {
     vm_kernel_space_ptr = (page_table_t *)(uintptr_t)(vm_read_cr3() & VM_ADDR_MASK);
+    vm_faults = 0;
+    vm_in_fault = 0;
     return 0;
 }
 
@@ -212,6 +225,67 @@ void vm_switch_kernel(void) {
     vm_switch(vm_kernel_space_ptr);
 }
 
+int vm_handle_page_fault(regs_t *r) {
+    uint64_t va = vm_read_cr2();
+    uint64_t err = r->error_code;
+
+    /* 防重入: 处理器自己缺页时不能再进来一次, 否则会递归到 triple fault。 */
+    if (vm_in_fault) {
+        return 0;
+    }
+    /* bit0 P: 页已存在, 是保护错误(COW/只读), M8 不处理。 */
+    if (err & 1) {
+        return 0;
+    }
+    /* bit3 RSVD: 页表项保留位被写坏, 页表已经不可信。 */
+    if (err & 8) {
+        return 0;
+    }
+    /* bit4 I/D: 取指缺页, M8 不处理。 */
+    if (err & 16) {
+        return 0;
+    }
+    /* 只管堆区的按需分页; 其他地址仍交给 panic(M6 回归)。 */
+    if (va < VM_HEAP_BASE || va >= VM_HEAP_BASE + VM_HEAP_SIZE) {
+        return 0;
+    }
+
+    vm_in_fault = 1;
+
+    uint64_t frame = pmm_alloc_frame();
+    if (frame == 0) {
+        vm_in_fault = 0;
+        return 0;   /* OOM: 交给 panic */
+    }
+
+    /* 新帧必须先清零, 否则用户会读到上一个使用者的数据。 */
+    volatile uint64_t *p = (volatile uint64_t *)(uintptr_t)frame;
+    for (int i = 0; i < 512; i++) {
+        p[i] = 0;
+    }
+
+    /*
+     * 必须映射到当前 CR3 指向的空间, 不能写死 kernel_space:
+     * 缺页可能发生在测试空间 A/B, 写死内核空间会"补了页但当前空间仍缺页",
+     * iretq 重试又缺页, 来回打转。
+     */
+    uint64_t page = va & ~(VM_PAGE_SIZE - 1);
+    if (vm_map(vm_current_space(), page, frame,
+               VM_PTE_PRESENT | VM_PTE_WRITE) != 0) {
+        pmm_free_frame(frame);
+        vm_in_fault = 0;
+        return 0;
+    }
+
+    vm_faults++;
+    vm_in_fault = 0;
+    return 1;   /* 返回 common stub → iretq 重试出错指令 */
+}
+
+uint64_t vm_fault_count(void) {
+    return vm_faults;
+}
+
 int vm_self_test(void) {
     page_table_t *ks = vm_kernel_space();
     int ok = 1;
@@ -274,6 +348,31 @@ int vm_self_test(void) {
 
     vm_unmap(ks, VM_SCRATCH_BASE);
     pmm_free_frame(frame);
+
+    /*
+     * 按需分页: 堆区最后一页第一次写必须触发一次 #PF, 处理器补页后重试;
+     * 第二次写同一页不再缺页。
+     */
+    if (ok) {
+        uint64_t c0 = vm_fault_count();
+        volatile uint64_t *hp =
+            (volatile uint64_t *)(uintptr_t)(VM_HEAP_BASE + VM_HEAP_SIZE - VM_PAGE_SIZE);
+        *hp = 0x5A5A5A5A5A5A5A5AULL;
+        uint64_t c1 = vm_fault_count();
+        uint64_t hv = *hp;
+        uint64_t c2 = vm_fault_count();
+
+        if (c1 != c0 + 1 || c2 != c1 || hv != 0x5A5A5A5A5A5A5A5AULL) {
+            vga_printf("M8/VM: FAIL demand fault c0=%llu c1=%llu c2=%llu got=%p\n",
+                       (unsigned long long)c0, (unsigned long long)c1,
+                       (unsigned long long)c2, (void *)(uintptr_t)hv);
+            ok = 0;
+        } else {
+            vga_printf("M8/VM: demand fault c0=%llu c1=%llu c2=%llu PASS\n",
+                       (unsigned long long)c0, (unsigned long long)c1,
+                       (unsigned long long)c2);
+        }
+    }
 
     /*
      * 地址空间隔离: A、B 各自映射同一个虚拟地址, 必须看到各自的值。

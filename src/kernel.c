@@ -20,6 +20,8 @@
  *            2026-11-02 (M8 Task 2) keyboard_init() 之后调用 pmm_self_test()。
  *            2026-11-07 (M8 Task 3) idt_init() 之后、pmm_init() 之前调用 vm_init();
  *            自检顺序 pmm → vm。
+ *            2026-11-07 (M8 Task 5) M6_CASE==4 的故障地址由 0x300000 改为
+ *            0x40000000 —— M8 Task 2 的恒等映射扩展后 0x300000 已映射。
  *   队员验证: 各里程碑由队员在 QEMU 中运行判读屏幕输出。
  */
 
@@ -53,9 +55,11 @@ static void m6_trigger(void) {
        这一路错误码由 CPU 压, 值就是那个越界的段选择子 0x30 —— 是 M6 最强的判别点。 */
     __asm__ volatile ("mov $0x30, %%ax; mov %%ax, %%ds" ::: "ax");
 #elif M6_CASE == 4
-    /* 恒等映射只覆盖前 2MB(boot.asm 的 2MB 大页), 0x300000 对应的 PD[1] 为 0。
+    /* M6 时恒等映射只有前 2MB, 读 0x300000 会 #PF。M8 Task 2 已把恒等映射
+       扩到可用 RAM(本机约 256MB), 0x300000 现在有映射, 不再触发缺页;
+       改用 1GB 处(超出 memory map 的可用 RAM, PD[512] 不存在)保持这条回归有效。
        指针和结果都要 volatile —— 否则 -O2 会把整条访存优化掉。 */
-    volatile uint64_t *p = (volatile uint64_t *)0x300000UL;
+    volatile uint64_t *p = (volatile uint64_t *)0x40000000UL;
     volatile uint64_t v = *p;
     (void)v;
 #endif

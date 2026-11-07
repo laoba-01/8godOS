@@ -8,6 +8,7 @@
 #define VM_H
 
 #include <stdint.h>
+#include "idt.h"   /* regs_t: #PF 处理器要读 error_code */
 
 #define VM_PAGE_SIZE  4096ULL
 #define VM_PTE_PRESENT (1ULL << 0)
@@ -63,6 +64,17 @@ void vm_switch(page_table_t *space);
 
 /* 切回内核地址空间。 */
 void vm_switch_kernel(void);
+
+/*
+ * #PF 恢复入口, 由 idt.c 的 isr_handler 在 panic 之前调用。
+ * 返回 1 = 已补页, 返回 common stub 后 iretq 会重试出错指令;
+ * 返回 0 = 不归本处理器管, 交给 panic。
+ * 只处理: 堆区 [VM_HEAP_BASE, VM_HEAP_BASE + VM_HEAP_SIZE) 的"页不存在"缺页。
+ */
+int vm_handle_page_fault(regs_t *r);
+
+/* 已成功补页的次数(诊断用)。 */
+uint64_t vm_fault_count(void);
 
 int vm_self_test(void);
 

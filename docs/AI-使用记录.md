@@ -54,16 +54,20 @@
 |------|------|------|
 | `src/boot.asm` | **混合** | M1/M2 由队员编写。AI 于 2026-09-11 **应队员要求**（「把注释全删了吧」）发出 9 次 Edit，**内容为纯删注释（指令行逐字未变）**，且这些改动**未进入任何提交**——M7 之前该文件与 M2 提交 `b0186ac` 逐字一致。AI 于 2026-10-11（M7 Task 1）应队员要求（「汇编和链接我都不会，你帮我写吧」）把引导期结构迁入 `.bootstrap` 段、加 `.bss` 清零循环（见第三节）。 |
 | `src/linker.ld` | **混合** | M1 由队员编写。AI 于 2026-10-11（M7 Task 1）新增 `.bootstrap` 输出段与 `__bss_start`/`__bss_end` 夹子。 |
-| `src/kernel.c` | **混合** | M3 的 `kmain` 由队员手写。AI 于 09-14、09-15 整写（M5 结构调整）、09-17 整写（M6 增加 `idt_init()` 与异常用例开关）、10-12 加 `m7_probe()`/`M7_CASE` 探路开关、10-13 应队员要求删去 `kmain` 开头的 M5 遗留输出（两行 `vga_printf` 自检 + `M5: VGA terminal` 一行；副作用：启动路径上不再覆盖 `%c`/`%s`/`%%`/`%d`/`%u`/`%x`/`%p`）。 |
+| `src/kernel.c` | **混合** | M3 的 `kmain` 由队员手写。AI 于 09-14、09-15 整写（M5 结构调整）、09-17 整写（M6 增加 `idt_init()` 与异常用例开关）、10-12 加 `m7_probe()`/`M7_CASE` 探路开关、10-13 应队员要求删去 `kmain` 开头的 M5 遗留输出（两行 `vga_printf` 自检 + `M5: VGA terminal` 一行；副作用：启动路径上不再覆盖 `%c`/`%s`/`%%`/`%d`/`%u`/`%x`/`%p`）、11-01/11-02（M8 Task 1/2 接 `pmm_init` 与自检）、11-07（Task 3~6：`vm_init`、`heap_init`、`vm_self_test`、`heap_self_test`；Task 5 订正 `M6_CASE==4` 的故障地址）。 |
 | `src/vga.h` | **AI 生成** | 2026-09-14 由 AI 整写（队员要求「vga.h写吧,头文件何函数都还没声明」）。 |
 | `src/vga.c` | **混合** | M5 拆分后，AI 于 09-15 整写（队员要求「剩下的你直接帮我写吧,今晚M5要完工」）；M6 的 `vga_printf` 与 `%X` 由 AI 于 09-17 生成。 |
 | `src/io.h` | **队员手写** | M5 编写，AI 未改动。 |
 | `src/isr.asm` | **AI 生成** | 2026-09-17，M6。M7（10-12）：stub 表 32 → 48，`32~47` 全用 `ISR_NOERR`。 |
 | `src/idt.c` | **AI 生成** | 2026-09-17，M6 整写。M7（10-12）：`idt_init` 补填 `32~47` 门。M7（10-13）：`isr_handler` 的 `vector >= IDT_IRQ_BASE` 分支 —— **原档位 🔴（队员写），队员走出效率出口「我只会写伪代码，真代码你来写吧」，由 AI 代写**（队员已给出 `>=` 的比较方向，AI 补上比较对象与 `return`）。 |
-| `src/idt.h` | **AI 生成** | 2026-09-17，M6。M7（10-12）：加 `IDT_IRQ_BASE`/`IDT_IRQ_LAST`/`IDT_IRQ_COUNT`。 |
+| `src/idt.h` | **AI 生成** | 2026-09-17，M6。M7（10-12）：加 `IDT_IRQ_BASE`/`IDT_IRQ_LAST`/`IDT_IRQ_COUNT`。M8 Task 5（11-07）：`isr_handler` 加 `#PF` 恢复分支（`vector == 14 && vm_handle_page_fault(r)`）。 |
+| `src/mb2.c` / `mb2.h` | **AI 生成** | M8 Task 1（2026-11-01）：tag 遍历 + memory map 解析。 |
+| `src/pmm.c` / `pmm.h` | **AI 生成** | M8 Task 1（11-01）：multiboot2 信息结构映射 + 解析；Task 2（11-02）：位图帧分配器 + 恒等映射扩展 + 自检。 |
+| `src/vm.c` / `vm.h` | **AI 生成** | M8 Task 3（11-07）：四级遍历器、`vm_map`/`vm_unmap`；Task 4：`vm_create_space` + CR3 切换；Task 5：`#PF` 恢复 + 按需分页。 |
+| `src/heap.c` / `heap.h` | **AI 生成** | M8 Task 6（11-07）：堆块布局、`kmalloc`/`kfree`、切分/合并、自检。 |
 | `src/irq.c` | **AI 生成** | M7（10-12）**占位实现**（`irq_dispatch` 只打印向量号）。⚠ 原档位 🔴，Task 3 由队员从零重写；重写后本行与文件头声明一并改写。 |
 | `src/irq.h` | **AI 生成** | M7（10-12）：`isr_reg_t` 与 `irq_dispatch` 原型。原档位 ⚪。 |
-| `Makefile` | **混合** | M1/M4 由队员编写；09-14、09-15、09-17 由 AI 增改构建规则。 |
+| `Makefile` | **混合** | M1/M4 由队员编写；09-14、09-15、09-17、10-12、10-20 由 AI 增改构建规则；M8（11-01~11-07）由 AI 增加 `mb2.o`/`pmm.o`/`vm.o`/`heap.o` 及依赖。 |
 | `tools/decode_vga.py` | **AI 生成** | 原版 09-15 由 AI 写入 `build/`（已随 `make clean` 丢失）；09-17 由 AI 重建并迁至 `tools/`。 |
 | `计划书.md` | **AI 生成 + 队员修订** | 2026-09-06 由 AI 起草（该会话首条请求即「帮我拟草一份计划书」）；此后各里程碑由 AI 逐次更新，队员审阅。 |
 | `README.md` | **AI 生成 + 队员修订** | 09-08 由 AI 写入，其后多次由 AI 更新。 |
@@ -538,6 +542,7 @@ C:\Users\<用户>\.claude\projects\D--8GodOS\*.jsonl
 | 2026-11-07 | 本次会话 | **M8 Task 4（🔴：`vm_create_space`、`vm_switch`/`vm_switch_kernel`、空间隔离自检）** | 队员「继续 / 这个接着做啊」→ AI 全写地址空间创建与 CR3 切换，扩展 `vm_self_test`。TDD：先看 `M8/VM: FAIL create space`，再实现并看到 `space A=0xaaaa… B=0xbbbb… PASS`。负对照（不复制 `entry[0]`）实测按预测 triple fault：`v=0e` 在 `RIP=0x102644`、`CR2=0x102644`、`CR3=0x117000`，随后 `v=08`，`check_exception old: 0x8 new 0xe`；测完已还原并复验 PASS |
 | 2026-11-07 | 本次会话 | **M8 Task 5（🔴：`vm_handle_page_fault`、`idt.c` 的 #PF 分支、按需分页自检）** | 按计划 AI 全写 `#PF` 恢复与堆区按需分页。TDD：先看 `EXCEPTION 0x0E`、`cr2=0xffff800000fff000`，再实现处理器并实测 `demand fault c0=0 c1=1 c2=1 PASS`、`-d int` 恰好一次 `v=0e`；键盘回归 `sendkey h` 屏幕出 `h`。**发现计划冲突**：Step 5 原用 `0x300000` 验证「堆区外仍 panic」，但 M8 Task 2 已把恒等映射扩到可用 RAM，该地址现在有映射；`M6_CASE==4` 改用 `0x40000000`，实测 `cr2=0x40000000` 并 panic。计划已加订正注记 |
 | 2026-11-07 | 本次会话 | **M8 Task 6（🔴：`heap_init`、`kmalloc`/`kfree`、`heap_self_test`）** | 按计划 AI 全写 `heap.c`/`heap.h`，接上 `kernel.c` 的 `heap_init()` 与自检。TDD：先看 `M8/HEAP: FAIL alloc`，再实现 first-fit + 切分 + 合并，实测 `align/overlap/pattern`、`oom`、`cross-page +24`、`coalesce (free=0xf0) PASS`。**负对照暴露计划测试的两处假通过**：① `d=kmalloc(200)` 对齐后 208、b 块单块就够；② 尾部巨大空闲块会直接满足 `d`。改为 `d=224` 且先占满尾部，负对照（删高地址合并）才正确失败（`free=0xe0`）。计划已加订正注记 |
+| 2026-11-07 | 本次会话 | **M8 Task 7（收尾：全量回归 + 文档回填）** | AI 执行 `make clean && make`（零 gcc 警告，`ld` 仅 M5 两条），代跑全量回归：PMM/VM/地址空间/按需分页/HEAP/键盘/`#DE`/堆区外 `#PF`/256MB vs 512MB（`free` 65220 vs 130756）全过；回填 `计划书.md` §M8、`README.md` 目录与进度、本文件逐文件表。按 2026-11-01 约定，`M8-串联.md` 与「埋错找 bug」收尾不执行 |
 
 **M7 分工表（2026-09-21 定）**：
 

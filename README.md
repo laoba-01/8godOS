@@ -14,7 +14,7 @@
 | M5 | VGA 终端(滚动 + 硬件光标) | ✅ 完成 |
 | M6 | IDT 与 CPU 异常处理 | ✅ 完成 |
 | M7 | 外部中断(PIC + 键盘) | ✅ 完成 |
-| M8 | 内存管理(物理 + 虚拟 + 按需分页 + 堆) | 🚧 进行中(Task 1~6 完成) |
+| M8 | 内存管理(物理 + 虚拟 + 按需分页 + 堆) | ✅ 完成 |
 
 详细技术方案与路线图见 [`计划书.md`](计划书.md)。
 
@@ -94,13 +94,20 @@ qemu-system-x86_64 -cdrom build/os.iso
 ├── src/
 │   ├── boot.asm      # multiboot2 头 + 长模式切换(32→64) + 64 位入口
 │   ├── linker.ld     # 链接脚本(内核固定在 1MB)
-│   ├── kernel.c      # kmain(启动逻辑) + M6 异常用例开关
-│   ├── vga.c         # VGA 文本终端 + vga_printf(M5/M6)
-│   ├── vga.h         # VGA 接口与调色板常量(M5 加入)
-│   ├── io.h          # 端口读写 outb / inb(M5 加入)
-│   ├── isr.asm       # 32 个异常 stub(宏生成) + common stub(M6 加入)
-│   ├── idt.c         # IDT 表 + 门构造 + 异常名表 + panic(M6 加入)
-│   └── idt.h         # 门描述符与 regs_t 栈帧结构(M6 加入)
+│   ├── kernel.c      # kmain(初始化顺序 + 自检 + 主循环) + M6 异常用例开关
+│   ├── vga.c / vga.h # VGA 文本终端 + vga_printf(M5/M6)
+│   ├── io.h          # 端口读写 outb / inb(M5)
+│   ├── isr.asm       # 48 个 stub(异常 + IRQ, 宏生成) + common stub(M6/M7)
+│   ├── idt.c / idt.h # IDT 表、门构造、异常名表、#PF 恢复分支(M6/M7/M8)
+│   ├── irq.c / irq.h # IRQ 分发表 + 注册/分发(M7)
+│   ├── pic.c / pic.h # 8259A 重映射、屏蔽位、EOI(M7)
+│   ├── keyboard.c /  # scancode 状态机 + 环形缓冲(M7)
+│   │   keyboard.h
+│   ├── mb2.c / mb2.h # multiboot2 tag 遍历 + memory map 解析(M8)
+│   ├── pmm.c / pmm.h # 位图帧分配器 + 恒等映射扩展(M8)
+│   ├── vm.c / vm.h   # 四级页表、map/unmap、地址空间、#PF(M8)
+│   └── heap.c /      # kmalloc/kfree(first-fit + 切分 + 合并)(M8)
+│       heap.h
 ├── tools/
 │   └── decode_vga.py # 显存 dump 解码器(取证用, 故意放在 build/ 之外)
 ├── grub/
